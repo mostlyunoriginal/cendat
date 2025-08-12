@@ -38,14 +38,14 @@ List: Use the list_* methods (list_products, list_geos, list_variables) with pat
 
 Set: Use the set_* methods (set_products, set_geos, set_variables) to lock in your selections. You can call these methods without arguments to use the results from your last "List" call.
 
-Get: Call the get_data() method to build and execute all the necessary API calls. This method handles complex geographic requirements automatically and utilizes thread pooling for speed.
+Get: Call the get_data() method to build and execute all the necessary API calls. This method handles complex geographic requirements automatically and utilizes thread pooling for speed. Thread pooling is controlled through the `max_workers` parameter. Note that for requests that will generate many (thousands or more) API calls, setting `max_workers` explicitly and at low values (say, < 100) will reduce the probability of errors due to server-side intervention.
 
 Convert: Use the to_polars() or to_pandas() methods on the response object to get your data in a ready-to-use DataFrame format.
 
 # Usage Examples
 
-## Example 1: Microdata (PUMS) Request
-This example demonstrates a complete workflow for retrieving Public Use Microdata Sample (PUMS) data for specific geographic areas in Alabama and Arizona.
+## Example 1: ACS Microdata (PUMS) Request
+This example demonstrates a complete workflow for retrieving Public Use Microdata Sample (PUMS) data from the ACS for specific geographic areas in Alabama and Arizona.
 
 ```python
 import polars as pl
@@ -167,9 +167,7 @@ cdh.set_variables(["B07009_002E", "B16010_009E"])
 #  get_data will issue an API query for every required parent geography. For
 #  places, and with no `within` specified, the below issues 104 queries
 #  (one for each state by year)
-response = cdh.get_data(
-    max_workers=200,
-)
+response = cdh.get_data()
 
 # 6. Convert and combine DataFrames
 # The result will be a list of DataFrames (one for each product/vintage).
@@ -177,4 +175,66 @@ response = cdh.get_data(
 if response and response.to_polars():
     final_df = pl.concat(response.to_polars())
     print(final_df.head())
+```
+
+## Example 3. Microdata Request
+This example pulls monthly CPS microdata.
+
+```python
+import polars as pl
+from dotenv import load_dotenv
+import os
+from cendat import CenDatHelper
+
+load_dotenv()
+
+# 1. Initialize without specifying years
+cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
+
+# 2. Explore available products without much restriction
+potential_products = cdh.list_products(patterns=["cps"])
+
+for product in potential_products:
+    print(product["title"], product["vintage"], product["is_microdata"], product["url"])
+
+# 3. Set to a specific year
+cdh.set_years(2019)
+
+# 4. Explore products again with more spcificity
+potential_products = cdh.list_products(patterns=["cps basic"])
+
+for product in potential_products:
+    print(product["title"], product["vintage"], product["is_microdata"], product["url"])
+
+# 5. Set the products based on the last (more specific) product listing
+cdh.set_products()
+
+# 6. Explore variables for employment, education, and age (also need to identify weight vars)
+potential_variables = cdh.list_variables(
+    patterns=[
+        "unemployed","school","weight","age",
+    ],
+    logic=any,
+)
+
+for variable in potential_variables:
+    print(variable["name"], variable["label"], variable["vintage"])
+
+# 7. Set the variables
+cdh.set_variables(["PELKAVL", "PEEDUCA", "PRTAGE", "PWCMPWGT", "PWLGWGT"])
+
+# 8. Explore geographies
+cdh.list_geos(to_dicts=True)
+
+# 9. Set to state - for microdata, we then need to provide specific state[s] in the `within` clause
+cdh.set_geos("040")
+
+# 10. Get the data for Colorado
+response = cdh.get_data(
+    within={'state': '08'}
+)
+
+# 11. Convert to polars df and stack
+dfs = pl.concat(response.to_polars())
+
 ```

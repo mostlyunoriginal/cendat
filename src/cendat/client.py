@@ -1,4 +1,3 @@
-import os
 import re
 import requests
 from typing import List, Union, Dict, Optional, Callable
@@ -208,9 +207,17 @@ class CenDatHelper:
                 dataset_type = "N/A"
                 if isinstance(c_dataset_val, list) and len(c_dataset_val) > 1:
                     dataset_type = c_dataset_val[1]
+
+                # --- FIX START: Make title more unique for products with sub-paths (e.g., monthly data) ---
+                title = d.get("title")
+                title = (
+                    f"{title} ({re.sub(r"http://api.census.gov/data/","", access_url)})"
+                )
+                # --- FIX END ---
+
                 products.append(
                     {
-                        "title": d.get("title"),
+                        "title": title,  # Use the modified, more unique title
                         "desc": d.get("description"),
                         "vintage": self._parse_vintage(d.get("c_vintage")),
                         "type": dataset_type,
@@ -263,6 +270,7 @@ class CenDatHelper:
             prods_to_set = self._filtered_products_cache
         else:
             title_list = [titles] if isinstance(titles, str) else titles
+            # Changed to filter on the more unique title created in list_products
             all_prods = self.list_products(to_dicts=True, years=self.years or [])
             for title in title_list:
                 matching_products = [p for p in all_prods if p.get("title") == title]
@@ -312,6 +320,9 @@ class CenDatHelper:
                         "product": product["title"],
                         "vintage": product["vintage"],
                         "requires": geo_info.get("requires"),
+                        # --- FIX START: Propagate the unique URL ---
+                        "url": product["url"],
+                        # --- FIX END ---
                     }
                 )
         result_list = flat_geo_list
@@ -354,11 +365,14 @@ class CenDatHelper:
             print("❌ Error: No valid geographies were found to set.")
             return
 
+        # --- FIX START: Use the unique product title to check for microdata ---
         is_microdata_present = any(
             p.get("is_microdata")
             for p in self.products
             if p["title"] in [g["product"] for g in geos_to_set]
         )
+        # --- FIX END ---
+
         unique_geos = set(g["desc"] for g in geos_to_set)
         if is_microdata_present and len(unique_geos) > 1:
             print(
@@ -414,6 +428,9 @@ class CenDatHelper:
                         "group": details.get("group", "N/A"),
                         "product": product["title"],
                         "vintage": product["vintage"],
+                        # --- FIX START: Propagate the unique URL ---
+                        "url": product["url"],
+                        # --- FIX END ---
                     }
                 )
         result_list = flat_variable_list
@@ -456,14 +473,17 @@ class CenDatHelper:
             return
         collapsed_vars = {}
         for var_info in vars_to_set:
-            key = (var_info["product"], tuple(var_info["vintage"]))
+            # --- FIX START: Use a composite key to ensure uniqueness ---
+            key = (var_info["product"], tuple(var_info["vintage"]), var_info["url"])
             if key not in collapsed_vars:
                 collapsed_vars[key] = {
                     "product": var_info["product"],
                     "vintage": var_info["vintage"],
+                    "url": var_info["url"],  # Store the unique URL
                     "names": [],
                 }
             collapsed_vars[key]["names"].append(var_info["name"])
+        # --- FIX END ---
         self.variables = list(collapsed_vars.values())
         print(f"✅ Variables set:")
         for var_group in self.variables:
@@ -484,10 +504,13 @@ class CenDatHelper:
         self.params = []
         for geo in self.geos:
             for var_group in self.variables:
+                # --- FIX START: Match using the unique URL as well ---
                 if (
                     geo["product"] == var_group["product"]
                     and geo["vintage"] == var_group["vintage"]
+                    and geo["url"] == var_group["url"]
                 ):
+                    # --- FIX END ---
                     self.params.append(
                         {
                             "product": geo["product"],
@@ -496,6 +519,9 @@ class CenDatHelper:
                             "desc": geo["desc"],
                             "requires": geo.get("requires"),
                             "names": var_group["names"],
+                            # --- FIX START: Propagate the correct URL for fetching ---
+                            "url": geo["url"],
+                            # --- FIX END ---
                         }
                     )
         if not self.params:
@@ -562,8 +588,10 @@ class CenDatHelper:
                 param["combinations"] = [{}]
                 continue
 
-            vintage = param["vintage"][0]
-            vintage_url = re.sub(r"/\d{4}/", f"/{vintage}/", product_info["base_url"])
+            # --- FIX START: Use the unique URL from the param dict, not a generic one ---
+            vintage_url = param["url"]
+            # --- FIX END ---
+
             print(f"ℹ️ Fetching parent geographies for '{param['desc']}'...")
             combinations = self._get_parent_geo_combinations(vintage_url, required_geos)
             param["combinations"] = combinations
@@ -572,7 +600,7 @@ class CenDatHelper:
     def get_data(
         self,
         within: Union[str, Dict, List[Dict]] = "us",
-        max_workers: Optional[int] = None,
+        max_workers: Optional[int] = 100,
     ) -> "CenDatResponse":
         """
         Retrieves data and returns a CenDatResponse object for further processing.
@@ -603,8 +631,11 @@ class CenDatHelper:
 
             variable_names = ",".join(param["names"])
             target_geo = param["desc"]
-            vintage = param["vintage"][0]
-            vintage_url = re.sub(r"/\d{4}/", f"/{vintage}/", product_info["base_url"])
+
+            # --- FIX START: Use the correct, unique URL from the param dictionary ---
+            vintage_url = param["url"]
+            # --- FIX END ---
+
             context = {"param_index": i}
 
             for within_clause in within_clauses:
