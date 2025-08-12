@@ -646,8 +646,10 @@ class CenDatHelper:
         """
         Retrieves data and returns a CenDatResponse object for further processing.
         """
-        if not self.params:
-            self._create_params()
+        # --- FIX START: Always recreate params to reflect the latest state ---
+        self._create_params()
+        # --- FIX END ---
+
         if not self.params:
             print(
                 "❌ Error: Could not create parameters. Please set geos and variables."
