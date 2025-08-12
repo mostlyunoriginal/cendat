@@ -4,28 +4,34 @@ cendat is a Python library designed to simplify the process of exploring and ret
 
 The library handles the complexities of the Census API's structure, such as geographic hierarchies and inconsistent product naming, allowing you to focus on getting the data you need.
 
-## Installation
+# Installation
 
 You can install cendat using pip.
 
 ```bash
 pip install cendat
 ```
-
-## Usage
-
 The library has optional dependencies for converting the response data into pandas or polars DataFrames. You can install the support you need:
 
-# Install with pandas support
+## Install with pandas support
+
+```bash
 pip install cendat[pandas]
+```
+## Install with polars support
 
-# Install with polars support
+```bash
 pip install cendat[polars]
+```
 
-# Install with both
+## Install with both
+
+```bash
 pip install cendat[all]
+```
 
-Core Workflow
+# Core Workflow
+
 The library is designed around a simple, four-step "List -> Set -> Get -> Convert" workflow:
 
 List: Use the list_* methods (list_products, list_geos, list_variables) with patterns to explore what's available and filter down to what you need.
@@ -36,8 +42,9 @@ Get: Call the get_data() method to build and execute all the necessary API calls
 
 Convert: Use the to_polars() or to_pandas() methods on the response object to get your data in a ready-to-use DataFrame format.
 
-Usage Examples
-Example 1: Microdata (PUMS) Request
+# Usage Examples
+
+## Example 1: Microdata (PUMS) Request
 This example demonstrates a complete workflow for retrieving Public Use Microdata Sample (PUMS) data for specific geographic areas in Alabama and Arizona.
 
 ```python
@@ -108,7 +115,7 @@ if pums_dataframes:
     print(pums_df.head())
 ```
 
-Example 2: Aggregate Data Request
+## Example 2: Aggregate Data Request
 This example shows how to retrieve aggregate data for a more complex geography (place) that requires parent-level information (state).
 
 ```python
