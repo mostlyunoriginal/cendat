@@ -390,7 +390,6 @@ class CenDatHelper:
             by (str, optional): The key to use for matching values.
                                 Must be either 'sumlev' (default) or 'desc'.
         """
-        # --- CHANGE START: New logic to handle 'values' and 'by' parameters ---
         if by not in ["sumlev", "desc"]:
             print("❌ Error: `by` must be either 'sumlev' or 'desc'.")
             return
@@ -405,7 +404,6 @@ class CenDatHelper:
             value_list = [values] if isinstance(values, str) else values
             all_geos = self.list_geos(to_dicts=True)
             geos_to_set = [g for g in all_geos if g.get(by) in value_list]
-        # --- CHANGE END ---
 
         if not geos_to_set:
             print("❌ Error: No valid geographies were found to set.")
@@ -515,7 +513,9 @@ class CenDatHelper:
             vars_to_set = self._filtered_variables_cache
         else:
             name_list = [names] if isinstance(names, str) else names
-            all_vars = self.list_variables(to_dicts=True)
+            # --- FIX START: Ensure a fresh, unfiltered list of variables is used ---
+            all_vars = self.list_variables(to_dicts=True, patterns=None)
+            # --- FIX END ---
             vars_to_set = [v for v in all_vars if v.get("name") in name_list]
         if not vars_to_set:
             print("❌ Error: No valid variables were found to set.")
