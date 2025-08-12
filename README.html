@@ -82,8 +82,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="cendat-a-python-helper-for-the-census-api" class="level1">
 <h1>cendat: A Python Helper for the Census API</h1>
+<section id="introduction" class="level2">
+<h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
 <p>cendat is a Python library designed to simplify the process of exploring and retrieving data from the U.S. Census Bureau’s API. It provides a high-level, intuitive workflow for discovering available datasets, filtering geographies and variables, and fetching data concurrently.</p>
 <p>The library handles the complexities of the Census API’s structure, such as geographic hierarchies and inconsistent product naming, allowing you to focus on getting the data you need.</p>
+</section>
+<section id="workflow" class="level2">
+<h2 class="anchored" data-anchor-id="workflow">Workflow</h2>
+<p>The library is designed around a simple, four-step “List -&gt; Set -&gt; Get -&gt; Convert” workflow:</p>
+<p>List: Use the list_* methods (list_products, list_geos, list_variables) with patterns to explore what’s available and filter down to what you need.</p>
+<p>Set: Use the set_* methods (set_products, set_geos, set_variables) to lock in your selections. You can call these methods without arguments to use the results from your last “List” call.</p>
+<p>Get: Call the get_data() method to build and execute all the necessary API calls. This method handles complex geographic requirements automatically and utilizes thread pooling for speed. Thread pooling is controlled through the <code>max_workers</code> parameter. Note that for requests that will generate many (thousands or more) API calls, setting <code>max_workers</code> explicitly and at low values (say, &lt; 100) will reduce the probability of errors due to server-side intervention.</p>
+<p>Convert: Use the to_polars() or to_pandas() methods on the response object to get your data in a ready-to-use DataFrame format.</p>
+</section>
 </section>
 <section id="installation" class="level1">
 <h1>Installation</h1>
@@ -103,13 +114,127 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install cendat<span class="pp">[</span><span class="ss">all</span><span class="pp">]</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
 </section>
-<section id="core-workflow" class="level1">
-<h1>Core Workflow</h1>
-<p>The library is designed around a simple, four-step “List -&gt; Set -&gt; Get -&gt; Convert” workflow:</p>
-<p>List: Use the list_* methods (list_products, list_geos, list_variables) with patterns to explore what’s available and filter down to what you need.</p>
-<p>Set: Use the set_* methods (set_products, set_geos, set_variables) to lock in your selections. You can call these methods without arguments to use the results from your last “List” call.</p>
-<p>Get: Call the get_data() method to build and execute all the necessary API calls. This method handles complex geographic requirements automatically and utilizes thread pooling for speed. Thread pooling is controlled through the <code>max_workers</code> parameter. Note that for requests that will generate many (thousands or more) API calls, setting <code>max_workers</code> explicitly and at low values (say, &lt; 100) will reduce the probability of errors due to server-side intervention.</p>
-<p>Convert: Use the to_polars() or to_pandas() methods on the response object to get your data in a ready-to-use DataFrame format.</p>
+<section id="usage" class="level1">
+<h1>Usage</h1>
+<p>The intended workflow is a step-by-step process of refining your data query. You start by selecting dataset products, then geographies, and finally the specific variables you need.</p>
+<ol type="1">
+<li><strong>Initialize</strong>: Create an instance of <code>CenDatHelper</code>, optionally setting the year(s) and API key.</li>
+<li><strong>Select Product</strong>: Use <code>list_products()</code> to find products and <code>set_products()</code> to select them.</li>
+<li><strong>Select Geography</strong>: Use <code>list_geos()</code> to see available geographic levels and <code>set_geos()</code> to choose them.</li>
+<li><strong>Select Variables</strong>: Use <code>list_variables()</code> to find explore available variables and <code>set_variables()</code> to select them.</li>
+<li><strong>Get Data</strong>: Call <code>get_data()</code> to concurrently execute the required queries. This returns a <code>CenDatResponse</code> object.</li>
+<li><strong>Convert</strong>: Use <code>.to_pandas()</code> or <code>.to_polars()</code> on the response object to get a ready-to-use DataFrame.</li>
+</ol>
+<hr>
+<section id="cendathelper-class" class="level2">
+<h2 class="anchored" data-anchor-id="cendathelper-class"><code>CenDatHelper</code> Class</h2>
+<section id="init__self-yearsnone-keynone" class="level3">
+<h3 class="anchored" data-anchor-id="init__self-yearsnone-keynone"><code>__init__(self, years=None, key=None)</code></h3>
+<p>Initializes the helper object.</p>
+<ul>
+<li><strong><code>years</code></strong> (<code>int</code> | <code>list[int]</code>, optional): The year or years of interest. Can be a single integer or a list of integers. Defaults to <code>None</code>.</li>
+<li><strong><code>key</code></strong> (<code>str</code>, optional): Your Census API key. Providing a key is recommended to avoid strict rate limits. Defaults to <code>None</code>.</li>
+</ul>
+</section>
+<section id="set_yearsself-years" class="level3">
+<h3 class="anchored" data-anchor-id="set_yearsself-years"><code>set_years(self, years)</code></h3>
+<p>Sets the primary year or years for data queries.</p>
+<ul>
+<li><strong><code>years</code></strong> (<code>int</code> | <code>list[int]</code>): The year or years to set.</li>
+</ul>
+</section>
+<section id="load_keyself-keynone" class="level3">
+<h3 class="anchored" data-anchor-id="load_keyself-keynone"><code>load_key(self, key=None)</code></h3>
+<p>Loads a Census API key for authenticated requests.</p>
+<ul>
+<li><strong><code>key</code></strong> (<code>str</code>, optional): The API key to load.</li>
+</ul>
+</section>
+<section id="list_productsself-yearsnone-patternsnone-to_dictstrue-logicall-match_intitle" class="level3">
+<h3 class="anchored" data-anchor-id="list_productsself-yearsnone-patternsnone-to_dictstrue-logicall-match_intitle"><code>list_products(self, years=None, patterns=None, to_dicts=True, logic=all, match_in='title')</code></h3>
+<p>Lists available data products, filtered by year and search patterns.</p>
+<ul>
+<li><strong><code>years</code></strong> (<code>int</code> | <code>list[int]</code>, optional): Filters products available for the specified year(s). Defaults to the years set on the object.</li>
+<li><strong><code>patterns</code></strong> (<code>str</code> | <code>list[str]</code>, optional): Regex pattern(s) to search for within the product metadata.</li>
+<li><strong><code>to_dicts</code></strong> (<code>bool</code>, optional): If <code>True</code> (default), returns a list of dictionaries with full product details. If <code>False</code>, returns a list of product titles.</li>
+<li><strong><code>logic</code></strong> (<code>callable</code>, optional): The logic to use when multiple patterns are provided. Can be <code>all</code> (default) or <code>any</code>.</li>
+<li><strong><code>match_in</code></strong> (<code>str</code>, optional): The field to match patterns against. Can be <code>'title'</code> (default) or <code>'desc'</code>.</li>
+</ul>
+</section>
+<section id="set_productsself-titlesnone" class="level3">
+<h3 class="anchored" data-anchor-id="set_productsself-titlesnone"><code>set_products(self, titles=None)</code></h3>
+<p>Sets the active data products for the session.</p>
+<ul>
+<li><strong><code>titles</code></strong> (<code>str</code> | <code>list[str]</code>, optional): The title or list of titles of the products to set. If <code>None</code>, it sets all products from the last <code>list_products()</code> call.</li>
+</ul>
+</section>
+<section id="list_geosself-to_dictsfalse-patternsnone-logicall" class="level3">
+<h3 class="anchored" data-anchor-id="list_geosself-to_dictsfalse-patternsnone-logicall"><code>list_geos(self, to_dicts=False, patterns=None, logic=all)</code></h3>
+<p>Lists available geographies for the currently set products.</p>
+<ul>
+<li><strong><code>to_dicts</code></strong> (<code>bool</code>, optional): If <code>True</code>, returns a list of dictionaries with full geography details. If <code>False</code> (default), returns a list of unique summary level (<code>sumlev</code>) strings.</li>
+<li><strong><code>patterns</code></strong> (<code>str</code> | <code>list[str]</code>, optional): Regex pattern(s) to search for within the geography description.</li>
+<li><strong><code>logic</code></strong> (<code>callable</code>, optional): The logic to use when multiple patterns are provided. Can be <code>all</code> (default) or <code>any</code>.</li>
+</ul>
+</section>
+<section id="set_geosself-valuesnone-bysumlev" class="level3">
+<h3 class="anchored" data-anchor-id="set_geosself-valuesnone-bysumlev"><code>set_geos(self, values=None, by='sumlev')</code></h3>
+<p>Sets the active geographies for the session.</p>
+<ul>
+<li><strong><code>values</code></strong> (<code>str</code> | <code>list[str]</code>, optional): The geography values to set. If <code>None</code>, sets all geos from the last <code>list_geos()</code> call.</li>
+<li><strong><code>by</code></strong> (<code>str</code>, optional): The key to use for matching <code>values</code>. Must be either <code>'sumlev'</code> (default) or <code>'desc'</code>.</li>
+</ul>
+</section>
+<section id="list_variablesself-to_dictstrue-patternsnone-logicall-match_inlabel" class="level3">
+<h3 class="anchored" data-anchor-id="list_variablesself-to_dictstrue-patternsnone-logicall-match_inlabel"><code>list_variables(self, to_dicts=True, patterns=None, logic=all, match_in='label')</code></h3>
+<p>Lists available variables for the currently set products.</p>
+<ul>
+<li><strong><code>to_dicts</code></strong> (<code>bool</code>, optional): If <code>True</code> (default), returns a list of dictionaries with full variable details. If <code>False</code>, returns a list of unique variable names.</li>
+<li><strong><code>patterns</code></strong> (<code>str</code> | <code>list[str]</code>, optional): Regex pattern(s) to search for within the variable metadata.</li>
+<li><strong><code>logic</code></strong> (<code>callable</code>, optional): The logic to use when multiple patterns are provided. Can be <code>all</code> (default) or <code>any</code>.</li>
+<li><strong><code>match_in</code></strong> (<code>str</code>, optional): The field to match patterns against. Can be <code>'label'</code> (default) or <code>'name'</code>.</li>
+</ul>
+</section>
+<section id="set_variablesself-namesnone" class="level3">
+<h3 class="anchored" data-anchor-id="set_variablesself-namesnone"><code>set_variables(self, names=None)</code></h3>
+<p>Sets the active variables for the session.</p>
+<ul>
+<li><strong><code>names</code></strong> (<code>str</code> | <code>list[str]</code>, optional): The name or list of names of the variables to set. If <code>None</code>, sets all variables from the last <code>list_variables()</code> call.</li>
+</ul>
+</section>
+<section id="get_dataself-withinus-max_workers100" class="level3">
+<h3 class="anchored" data-anchor-id="get_dataself-withinus-max_workers100"><code>get_data(self, within='us', max_workers=100)</code></h3>
+<p>Executes the API calls based on the set parameters and retrieves the data.</p>
+<ul>
+<li><strong><code>within</code></strong> (<code>str</code> | <code>dict</code> | <code>list[dict]</code>, optional): Defines the geographic scope of the query.
+<ul>
+<li>For <strong>aggregate</strong> data, this can be a dictionary filtering parent geographies (e.g., <code>{'state': '06'}</code> for California).</li>
+<li>For <strong>microdata</strong>, this must be a dictionary specifying the target geography and its codes (e.g., <code>{'public use microdata area': ['7701', '7702']}</code>).</li>
+<li>Defaults to <code>'us'</code> for nationwide data where applicable.</li>
+</ul></li>
+<li><strong><code>max_workers</code></strong> (<code>int</code>, optional): The maximum number of concurrent threads to use for making API calls. Defaults to <code>100</code>.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="cendatresponse-class" class="level2">
+<h2 class="anchored" data-anchor-id="cendatresponse-class"><code>CenDatResponse</code> Class</h2>
+<p>A container for the data returned by <code>CenDatHelper.get_data()</code>.</p>
+<section id="to_polarsself-schema_overridesnone" class="level3">
+<h3 class="anchored" data-anchor-id="to_polarsself-schema_overridesnone"><code>to_polars(self, schema_overrides=None)</code></h3>
+<p>Converts the raw response data into a list of Polars DataFrames.</p>
+<ul>
+<li><strong><code>schema_overrides</code></strong> (<code>dict</code>, optional): A dictionary mapping column names to Polars data types to override the inferred schema. Example: <code>{'POP': pl.Int64}</code>.</li>
+</ul>
+</section>
+<section id="to_pandasself-dtypesnone" class="level3">
+<h3 class="anchored" data-anchor-id="to_pandasself-dtypesnone"><code>to_pandas(self, dtypes=None)</code></h3>
+<p>Converts the raw response data into a list of Pandas DataFrames.</p>
+<ul>
+<li><strong><code>dtypes</code></strong> (<code>dict</code>, optional): A dictionary mapping column names to Pandas data types, which is passed to the <code>.astype()</code> method. Example: <code>{'POP': 'int64'}</code>.</li>
+</ul>
+</section>
+</section>
 </section>
 <section id="usage-examples" class="level1">
 <h1>Usage Examples</h1>

@@ -13,8 +13,17 @@ class CenDatResponse:
     def __init__(self, data: List[Dict]):
         self._data = data
 
-    def to_polars(self) -> List["pl.DataFrame"]:
-        """Converts the response data into a list of Polars DataFrames."""
+    def to_polars(
+        self, schema_overrides: Optional[Dict] = None
+    ) -> List["pl.DataFrame"]:
+        """
+        Converts the response data into a list of Polars DataFrames.
+
+        Args:
+            schema_overrides (dict, optional): A dictionary to override inferred schema types.
+                                                Passed directly to polars.DataFrame().
+                                                Example: {'POP': pl.Int64, 'GEO_ID': pl.Utf8}
+        """
         try:
             import polars as pl
         except ImportError:
@@ -28,7 +37,12 @@ class CenDatResponse:
             if not item.get("data"):
                 continue  # Skip if no data was returned for this parameter set
 
-            df = pl.DataFrame(item["data"], schema=item["schema"], orient="row")
+            df = pl.DataFrame(
+                item["data"],
+                schema=item["schema"],
+                orient="row",
+                schema_overrides=schema_overrides,
+            )
 
             # Add context columns
             df = df.with_columns(
@@ -42,8 +56,15 @@ class CenDatResponse:
             dataframes.append(df)
         return dataframes
 
-    def to_pandas(self) -> List["pd.DataFrame"]:
-        """Converts the response data into a list of Pandas DataFrames."""
+    def to_pandas(self, dtypes: Optional[Dict] = None) -> List["pd.DataFrame"]:
+        """
+        Converts the response data into a list of Pandas DataFrames.
+
+        Args:
+            dtypes (dict, optional): A dictionary of column names to data types,
+                                     passed to the pandas.DataFrame.astype() method.
+                                     Example: {'POP': 'int64', 'GEO_ID': 'str'}
+        """
         try:
             import pandas as pd
         except ImportError:
@@ -58,6 +79,9 @@ class CenDatResponse:
                 continue  # Skip if no data was returned for this parameter set
 
             df = pd.DataFrame(item["data"], columns=item["schema"])
+
+            if dtypes:
+                df = df.astype(dtypes, errors="ignore")
 
             # Add context columns
             df["product"] = item["product"]
@@ -94,8 +118,8 @@ class CenDatHelper:
 
         Args:
             years (int | list[int], optional): The year or years of interest.
-                                               If provided, they are set upon
-                                               initialization. Defaults to None.
+                                                 If provided, they are set upon
+                                                 initialization. Defaults to None.
             key (str, optional): An API key to load upon initialization.
         """
         self.years: Optional[List[int]] = None
@@ -183,6 +207,7 @@ class CenDatHelper:
         patterns: Optional[Union[str, List[str]]] = None,
         to_dicts: bool = True,
         logic: Callable[[iter], bool] = all,
+        match_in: str = "title",
     ) -> Union[List[str], List[Dict[str, str]]]:
         """
         Lists available data products from the JSON endpoint.
@@ -193,6 +218,11 @@ class CenDatHelper:
                 return []
             products = []
             for d in data["dataset"]:
+                is_micro = str(d.get("c_isMicrodata", "false")).lower() == "true"
+                is_agg = str(d.get("c_isAggregate", "false")).lower() == "true"
+                if not is_micro and not is_agg:
+                    continue
+
                 access_url = next(
                     (
                         dist.get("accessURL")
@@ -208,24 +238,20 @@ class CenDatHelper:
                 if isinstance(c_dataset_val, list) and len(c_dataset_val) > 1:
                     dataset_type = c_dataset_val[1]
 
-                # --- FIX START: Make title more unique for products with sub-paths (e.g., monthly data) ---
                 title = d.get("title")
                 title = (
-                    f"{title} ({re.sub(r"http://api.census.gov/data/","", access_url)})"
+                    f"{title} ({re.sub(r'http://api.census.gov/data/','', access_url)})"
                 )
-                # --- FIX END ---
 
                 products.append(
                     {
-                        "title": title,  # Use the modified, more unique title
+                        "title": title,
                         "desc": d.get("description"),
                         "vintage": self._parse_vintage(d.get("c_vintage")),
                         "type": dataset_type,
                         "url": access_url,
-                        "is_microdata": str(d.get("c_isMicrodata", "false")).lower()
-                        == "true",
-                        "is_aggregate": str(d.get("c_isAggregate", "false")).lower()
-                        == "true",
+                        "is_microdata": is_micro,
+                        "is_aggregate": is_agg,
                     }
                 )
             self._products_cache = products
@@ -242,6 +268,11 @@ class CenDatHelper:
                 for p in filtered
                 if p.get("vintage") and target_set.intersection(p["vintage"])
             ]
+
+        if match_in not in ["title", "desc"]:
+            print("❌ Error: `match_in` must be either 'title' or 'desc'.")
+            return []
+
         if patterns:
             pattern_list = [patterns] if isinstance(patterns, str) else patterns
             try:
@@ -249,12 +280,13 @@ class CenDatHelper:
                 filtered = [
                     p
                     for p in filtered
-                    if p.get("title")
-                    and logic(regex.search(p["title"]) for regex in regexes)
+                    if p.get(match_in)
+                    and logic(regex.search(p[match_in]) for regex in regexes)
                 ]
             except re.error as e:
                 print(f"❌ Invalid regex pattern: {e}")
                 return []
+
         self._filtered_products_cache = filtered
         return filtered if to_dicts else [p["title"] for p in filtered]
 
@@ -270,7 +302,6 @@ class CenDatHelper:
             prods_to_set = self._filtered_products_cache
         else:
             title_list = [titles] if isinstance(titles, str) else titles
-            # Changed to filter on the more unique title created in list_products
             all_prods = self.list_products(to_dicts=True, years=self.years or [])
             for title in title_list:
                 matching_products = [p for p in all_prods if p.get("title") == title]
@@ -320,9 +351,7 @@ class CenDatHelper:
                         "product": product["title"],
                         "vintage": product["vintage"],
                         "requires": geo_info.get("requires"),
-                        # --- FIX START: Propagate the unique URL ---
                         "url": product["url"],
-                        # --- FIX END ---
                     }
                 )
         result_list = flat_geo_list
@@ -346,32 +375,47 @@ class CenDatHelper:
             else sorted(list(set([g["sumlev"] for g in result_list])))
         )
 
-    def set_geos(self, sumlevs: Optional[Union[str, List[str]]] = None):
+    def set_geos(
+        self,
+        values: Optional[Union[str, List[str]]] = None,
+        by: str = "sumlev",
+    ):
         """
-        Sets the active geographies and informs the user of any required parent geos.
+        Sets the active geographies, informing the user of any required parent geos.
+
+        Args:
+            values (str or list, optional): The geography values to set.
+                                            Can be summary levels or descriptions.
+                                            If None, sets all geos from the last `list_geos` call.
+            by (str, optional): The key to use for matching values.
+                                Must be either 'sumlev' (default) or 'desc'.
         """
+        # --- CHANGE START: New logic to handle 'values' and 'by' parameters ---
+        if by not in ["sumlev", "desc"]:
+            print("❌ Error: `by` must be either 'sumlev' or 'desc'.")
+            return
+
         geos_to_set = []
-        if sumlevs is None:
+        if values is None:
             if not self._filtered_geos_cache:
                 print("❌ Error: No geos to set. Run `list_geos` first.")
                 return
             geos_to_set = self._filtered_geos_cache
         else:
-            sumlev_list = [sumlevs] if isinstance(sumlevs, str) else sumlevs
+            value_list = [values] if isinstance(values, str) else values
             all_geos = self.list_geos(to_dicts=True)
-            geos_to_set = [g for g in all_geos if g.get("sumlev") in sumlev_list]
+            geos_to_set = [g for g in all_geos if g.get(by) in value_list]
+        # --- CHANGE END ---
 
         if not geos_to_set:
             print("❌ Error: No valid geographies were found to set.")
             return
 
-        # --- FIX START: Use the unique product title to check for microdata ---
         is_microdata_present = any(
             p.get("is_microdata")
             for p in self.products
             if p["title"] in [g["product"] for g in geos_to_set]
         )
-        # --- FIX END ---
 
         unique_geos = set(g["desc"] for g in geos_to_set)
         if is_microdata_present and len(unique_geos) > 1:
@@ -404,6 +448,7 @@ class CenDatHelper:
         to_dicts: bool = True,
         patterns: Optional[Union[str, List[str]]] = None,
         logic: Callable[[iter], bool] = all,
+        match_in: str = "label",
     ) -> Union[List[str], List[Dict[str, str]]]:
         """
         Lists available variables across all currently set products.
@@ -428,12 +473,15 @@ class CenDatHelper:
                         "group": details.get("group", "N/A"),
                         "product": product["title"],
                         "vintage": product["vintage"],
-                        # --- FIX START: Propagate the unique URL ---
                         "url": product["url"],
-                        # --- FIX END ---
                     }
                 )
         result_list = flat_variable_list
+
+        if match_in not in ["label", "name"]:
+            print("❌ Error: `match_in` must be either 'label' or 'name'.")
+            return []
+
         if patterns:
             pattern_list = [patterns] if isinstance(patterns, str) else patterns
             try:
@@ -441,12 +489,13 @@ class CenDatHelper:
                 result_list = [
                     v
                     for v in result_list
-                    if v.get("label")
-                    and logic(regex.search(v["label"]) for regex in regexes)
+                    if v.get(match_in)
+                    and logic(regex.search(v[match_in]) for regex in regexes)
                 ]
             except re.error as e:
                 print(f"❌ Invalid regex pattern: {e}")
                 return []
+
         self._filtered_variables_cache = result_list
         return (
             result_list
@@ -473,17 +522,15 @@ class CenDatHelper:
             return
         collapsed_vars = {}
         for var_info in vars_to_set:
-            # --- FIX START: Use a composite key to ensure uniqueness ---
             key = (var_info["product"], tuple(var_info["vintage"]), var_info["url"])
             if key not in collapsed_vars:
                 collapsed_vars[key] = {
                     "product": var_info["product"],
                     "vintage": var_info["vintage"],
-                    "url": var_info["url"],  # Store the unique URL
+                    "url": var_info["url"],
                     "names": [],
                 }
             collapsed_vars[key]["names"].append(var_info["name"])
-        # --- FIX END ---
         self.variables = list(collapsed_vars.values())
         print(f"✅ Variables set:")
         for var_group in self.variables:
@@ -504,13 +551,11 @@ class CenDatHelper:
         self.params = []
         for geo in self.geos:
             for var_group in self.variables:
-                # --- FIX START: Match using the unique URL as well ---
                 if (
                     geo["product"] == var_group["product"]
                     and geo["vintage"] == var_group["vintage"]
                     and geo["url"] == var_group["url"]
                 ):
-                    # --- FIX END ---
                     self.params.append(
                         {
                             "product": geo["product"],
@@ -519,9 +564,7 @@ class CenDatHelper:
                             "desc": geo["desc"],
                             "requires": geo.get("requires"),
                             "names": var_group["names"],
-                            # --- FIX START: Propagate the correct URL for fetching ---
                             "url": geo["url"],
-                            # --- FIX END ---
                         }
                     )
         if not self.params:
@@ -588,9 +631,7 @@ class CenDatHelper:
                 param["combinations"] = [{}]
                 continue
 
-            # --- FIX START: Use the unique URL from the param dict, not a generic one ---
             vintage_url = param["url"]
-            # --- FIX END ---
 
             print(f"ℹ️ Fetching parent geographies for '{param['desc']}'...")
             combinations = self._get_parent_geo_combinations(vintage_url, required_geos)
@@ -632,9 +673,7 @@ class CenDatHelper:
             variable_names = ",".join(param["names"])
             target_geo = param["desc"]
 
-            # --- FIX START: Use the correct, unique URL from the param dictionary ---
             vintage_url = param["url"]
-            # --- FIX END ---
 
             context = {"param_index": i}
 

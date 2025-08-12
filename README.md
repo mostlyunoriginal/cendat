@@ -1,8 +1,20 @@
 # cendat: A Python Helper for the Census API
 
+## Introduction
 cendat is a Python library designed to simplify the process of exploring and retrieving data from the U.S. Census Bureau's API. It provides a high-level, intuitive workflow for discovering available datasets, filtering geographies and variables, and fetching data concurrently.
 
 The library handles the complexities of the Census API's structure, such as geographic hierarchies and inconsistent product naming, allowing you to focus on getting the data you need.
+
+## Workflow
+The library is designed around a simple, four-step "List -> Set -> Get -> Convert" workflow:
+
+List: Use the list_* methods (list_products, list_geos, list_variables) with patterns to explore what's available and filter down to what you need.
+
+Set: Use the set_* methods (set_products, set_geos, set_variables) to lock in your selections. You can call these methods without arguments to use the results from your last "List" call.
+
+Get: Call the get_data() method to build and execute all the necessary API calls. This method handles complex geographic requirements automatically and utilizes thread pooling for speed. Thread pooling is controlled through the `max_workers` parameter. Note that for requests that will generate many (thousands or more) API calls, setting `max_workers` explicitly and at low values (say, < 100) will reduce the probability of errors due to server-side intervention.
+
+Convert: Use the to_polars() or to_pandas() methods on the response object to get your data in a ready-to-use DataFrame format.
 
 # Installation
 
@@ -30,17 +42,113 @@ pip install cendat[polars]
 pip install cendat[all]
 ```
 
-# Core Workflow
+# Usage
 
-The library is designed around a simple, four-step "List -> Set -> Get -> Convert" workflow:
+The intended workflow is a step-by-step process of refining your data query. You start by selecting dataset products, then geographies, and finally the specific variables you need.
 
-List: Use the list_* methods (list_products, list_geos, list_variables) with patterns to explore what's available and filter down to what you need.
+1.  **Initialize**: Create an instance of `CenDatHelper`, optionally setting the year(s) and API key.
+2.  **Select Product**: Use `list_products()` to find products and `set_products()` to select them.
+3.  **Select Geography**: Use `list_geos()` to see available geographic levels and `set_geos()` to choose them.
+4.  **Select Variables**: Use `list_variables()` to find explore available variables and `set_variables()` to select them.
+5.  **Get Data**: Call `get_data()` to concurrently execute the required queries. This returns a `CenDatResponse` object.
+6.  **Convert**: Use `.to_pandas()` or `.to_polars()` on the response object to get a ready-to-use DataFrame.
 
-Set: Use the set_* methods (set_products, set_geos, set_variables) to lock in your selections. You can call these methods without arguments to use the results from your last "List" call.
+---
 
-Get: Call the get_data() method to build and execute all the necessary API calls. This method handles complex geographic requirements automatically and utilizes thread pooling for speed. Thread pooling is controlled through the `max_workers` parameter. Note that for requests that will generate many (thousands or more) API calls, setting `max_workers` explicitly and at low values (say, < 100) will reduce the probability of errors due to server-side intervention.
+## `CenDatHelper` Class
 
-Convert: Use the to_polars() or to_pandas() methods on the response object to get your data in a ready-to-use DataFrame format.
+### `__init__(self, years=None, key=None)`
+
+Initializes the helper object.
+
+* **`years`** (`int` | `list[int]`, optional): The year or years of interest. Can be a single integer or a list of integers. Defaults to `None`.
+* **`key`** (`str`, optional): Your Census API key. Providing a key is recommended to avoid strict rate limits. Defaults to `None`.
+
+### `set_years(self, years)`
+
+Sets the primary year or years for data queries.
+
+* **`years`** (`int` | `list[int]`): The year or years to set.
+
+### `load_key(self, key=None)`
+
+Loads a Census API key for authenticated requests.
+
+* **`key`** (`str`, optional): The API key to load.
+
+### `list_products(self, years=None, patterns=None, to_dicts=True, logic=all, match_in='title')`
+
+Lists available data products, filtered by year and search patterns.
+
+* **`years`** (`int` | `list[int]`, optional): Filters products available for the specified year(s). Defaults to the years set on the object.
+* **`patterns`** (`str` | `list[str]`, optional): Regex pattern(s) to search for within the product metadata.
+* **`to_dicts`** (`bool`, optional): If `True` (default), returns a list of dictionaries with full product details. If `False`, returns a list of product titles.
+* **`logic`** (`callable`, optional): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
+* **`match_in`** (`str`, optional): The field to match patterns against. Can be `'title'` (default) or `'desc'`.
+
+### `set_products(self, titles=None)`
+
+Sets the active data products for the session.
+
+* **`titles`** (`str` | `list[str]`, optional): The title or list of titles of the products to set. If `None`, it sets all products from the last `list_products()` call.
+
+### `list_geos(self, to_dicts=False, patterns=None, logic=all)`
+
+Lists available geographies for the currently set products.
+
+* **`to_dicts`** (`bool`, optional): If `True`, returns a list of dictionaries with full geography details. If `False` (default), returns a list of unique summary level (`sumlev`) strings.
+* **`patterns`** (`str` | `list[str]`, optional): Regex pattern(s) to search for within the geography description.
+* **`logic`** (`callable`, optional): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
+
+### `set_geos(self, values=None, by='sumlev')`
+
+Sets the active geographies for the session.
+
+* **`values`** (`str` | `list[str]`, optional): The geography values to set. If `None`, sets all geos from the last `list_geos()` call.
+* **`by`** (`str`, optional): The key to use for matching `values`. Must be either `'sumlev'` (default) or `'desc'`.
+
+### `list_variables(self, to_dicts=True, patterns=None, logic=all, match_in='label')`
+
+Lists available variables for the currently set products.
+
+* **`to_dicts`** (`bool`, optional): If `True` (default), returns a list of dictionaries with full variable details. If `False`, returns a list of unique variable names.
+* **`patterns`** (`str` | `list[str]`, optional): Regex pattern(s) to search for within the variable metadata.
+* **`logic`** (`callable`, optional): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
+* **`match_in`** (`str`, optional): The field to match patterns against. Can be `'label'` (default) or `'name'`.
+
+### `set_variables(self, names=None)`
+
+Sets the active variables for the session.
+
+* **`names`** (`str` | `list[str]`, optional): The name or list of names of the variables to set. If `None`, sets all variables from the last `list_variables()` call.
+
+### `get_data(self, within='us', max_workers=100)`
+
+Executes the API calls based on the set parameters and retrieves the data.
+
+* **`within`** (`str` | `dict` | `list[dict]`, optional): Defines the geographic scope of the query.
+    * For **aggregate** data, this can be a dictionary filtering parent geographies (e.g., `{'state': '06'}` for California).
+    * For **microdata**, this must be a dictionary specifying the target geography and its codes (e.g., `{'public use microdata area': ['7701', '7702']}`).
+    * Defaults to `'us'` for nationwide data where applicable.
+* **`max_workers`** (`int`, optional): The maximum number of concurrent threads to use for making API calls. Defaults to `100`.
+
+---
+
+## `CenDatResponse` Class
+
+A container for the data returned by `CenDatHelper.get_data()`.
+
+### `to_polars(self, schema_overrides=None)`
+
+Converts the raw response data into a list of Polars DataFrames.
+
+* **`schema_overrides`** (`dict`, optional): A dictionary mapping column names to Polars data types to override the inferred schema. Example: `{'POP': pl.Int64}`.
+
+### `to_pandas(self, dtypes=None)`
+
+Converts the raw response data into a list of Pandas DataFrames.
+
+* **`dtypes`** (`dict`, optional): A dictionary mapping column names to Pandas data types, which is passed to the `.astype()` method. Example: `{'POP': 'int64'}`.
 
 # Usage Examples
 
