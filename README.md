@@ -48,7 +48,6 @@ Convert: Use the to_polars() or to_pandas() methods on the response object to ge
 This example demonstrates a complete workflow for retrieving Public Use Microdata Sample (PUMS) data for specific geographic areas in Alabama and Arizona.
 
 ```python
-import sys
 import polars as pl
 from dotenv import load_dotenv
 import os
@@ -119,7 +118,6 @@ if pums_dataframes:
 This example shows how to retrieve aggregate data for a more complex geography (place) that requires parent-level information (state).
 
 ```python
-import sys
 import polars as pl
 from dotenv import load_dotenv
 import os
@@ -157,7 +155,7 @@ potential_variables = cdh.list_variables(
     to_dicts=True, patterns=["total", "less.*high"]
 )
 
-for var in potential_vars:
+for var in potential_variables:
     print(var["name"], var["label"])
 
 cdh.set_variables(["B07009_002E", "B16010_009E"])
