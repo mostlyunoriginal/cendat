@@ -49,7 +49,7 @@ The intended workflow is a step-by-step process of refining your data query. You
 1.  **Initialize**: Create an instance of `CenDatHelper`, optionally setting the year(s) and API key.
 2.  **Select Product**: Use `list_products()` to find products and `set_products()` to select them.
 3.  **Select Geography**: Use `list_geos()` to see available geographic levels and `set_geos()` to choose them.
-4.  **Select Variables**: Use `list_variables()` to find explore available variables and `set_variables()` to select them.
+4.  **Select Variables**: Use `list_variables()` to explore available variables and `set_variables()` to select them.
 5.  **Get Data**: Call `get_data()` to concurrently execute the required queries. This returns a `CenDatResponse` object.
 6.  **Convert**: Use `.to_pandas()` or `.to_polars()` on the response object to get a ready-to-use DataFrame.
 
