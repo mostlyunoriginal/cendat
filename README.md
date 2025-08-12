@@ -10,6 +10,9 @@ You can install cendat using pip.
 
 ```bash
 pip install cendat
+```
+
+## Usage
 
 The library has optional dependencies for converting the response data into pandas or polars DataFrames. You can install the support you need:
 
@@ -37,6 +40,7 @@ Usage Examples
 Example 1: Microdata (PUMS) Request
 This example demonstrates a complete workflow for retrieving Public Use Microdata Sample (PUMS) data for specific geographic areas in Alabama and Arizona.
 
+```python
 import sys
 import polars as pl
 from dotenv import load_dotenv
@@ -102,10 +106,12 @@ pums_dataframes = response.to_polars()
 if pums_dataframes:
     pums_df = pl.concat(pums_dataframes)
     print(pums_df.head())
+```
 
 Example 2: Aggregate Data Request
 This example shows how to retrieve aggregate data for a more complex geography (place) that requires parent-level information (state).
 
+```python
 import sys
 import polars as pl
 from dotenv import load_dotenv
@@ -166,3 +172,4 @@ response = cdh.get_data(
 if response and response.to_polars():
     final_df = pl.concat(response.to_polars())
     print(final_df.head())
+```
