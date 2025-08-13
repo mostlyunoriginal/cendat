@@ -258,7 +258,9 @@ class CenDatHelper:
                 c_dataset_val = d.get("c_dataset")
                 dataset_type = "N/A"
                 if isinstance(c_dataset_val, list) and len(c_dataset_val) > 1:
-                    dataset_type = c_dataset_val[1]
+                    dataset_type = "/".join(c_dataset_val)
+                elif isinstance(c_dataset_val, str):
+                    dataset_type = c_dataset_val
 
                 title = d.get("title")
                 title = (
@@ -291,11 +293,10 @@ class CenDatHelper:
                 if p.get("vintage") and target_set.intersection(p["vintage"])
             ]
 
-        if match_in not in ["title", "desc"]:
-            print("❌ Error: `match_in` must be either 'title' or 'desc'.")
-            return []
-
         if patterns:
+            if match_in not in ["title", "desc"]:
+                print("❌ Error: `match_in` must be either 'title' or 'desc'.")
+                return []
             pattern_list = [patterns] if isinstance(patterns, str) else patterns
             try:
                 regexes = [re.compile(p, re.IGNORECASE) for p in pattern_list]
@@ -483,14 +484,17 @@ class CenDatHelper:
             if not data or "variables" not in data:
                 continue
             for name, details in data["variables"].items():
-                if name in ["GEO_ID", "for", "in"]:
+                if name in ["GEO_ID", "for", "in", "ucgid"]:
                     continue
                 flat_variable_list.append(
                     {
                         "name": name,
-                        "label": details.get("label"),
-                        "concept": details.get("concept"),
+                        "label": details.get("label", "N/A"),
+                        "concept": details.get("concept", "N/A"),
                         "group": details.get("group", "N/A"),
+                        "values": details.get("values", "N/A"),
+                        "type": details.get("predicateType", "N/A"),
+                        "sugg_wgt": details.get("suggested-weight", "N/A"),
                         "product": product["title"],
                         "vintage": product["vintage"],
                         "url": product["url"],
@@ -549,8 +553,16 @@ class CenDatHelper:
                     "vintage": var_info["vintage"],
                     "url": var_info["url"],
                     "names": [],
+                    "labels": [],
+                    "values": [],
+                    "types": [],
+                    "sugg_wgts": [],
                 }
-            collapsed_vars[key]["names"].append(var_info["name"])
+            for collapsed, granular in zip(
+                ["names", "labels", "values", "types", "sugg_wgts"],
+                ["name", "label", "values", "type", "sugg_wgt"],
+            ):
+                collapsed_vars[key][collapsed].append(var_info[granular])
         self.variables = list(collapsed_vars.values())
         print(f"✅ Variables set:")
         for var_group in self.variables:
@@ -584,6 +596,9 @@ class CenDatHelper:
                             "desc": geo["desc"],
                             "requires": geo.get("requires"),
                             "names": var_group["names"],
+                            "labels": var_group["labels"],
+                            "values": var_group["values"],
+                            "types": var_group["types"],
                             "url": geo["url"],
                         }
                     )

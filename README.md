@@ -160,6 +160,7 @@ import polars as pl
 from dotenv import load_dotenv
 import os
 from cendat import CenDatHelper
+from pprint import pprint
 
 # Load environment variables (e.g., for CENSUS_API_KEY)
 load_dotenv()
@@ -214,8 +215,14 @@ response = cd.get_data(
     ]
 )
 
-# 6. Convert to a DataFrame
-# The response object can be converted to a list of Polars DataFrames
+# 6. Review subscriptable attributes
+for detail in ["products", "geos", "variables"]:
+    print('-'*20, detail, '-'*20)
+    pprint(cd[detail])
+
+# 7. Convert to a DataFrame
+# The response object can be converted to a list of Polars DataFrames 
+#  which itself is easily concatenated (assuming the products are compatible)
 pums_dataframes = response.to_polars()
 if pums_dataframes:
     pums_df = pl.concat(pums_dataframes)
