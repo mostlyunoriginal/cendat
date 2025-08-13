@@ -223,7 +223,7 @@ if pums_dataframes:
 ```
 
 ## Example 2: Aggregate Data Request
-This example shows how to retrieve aggregate data for a more complex geography (place) that requires parent-level information (state).
+This example shows how to retrieve aggregate data for a more complex geography--county (or part)--that requires API calls nested within parent-level geographies (place and state, in this case). API calls are constructed automatically for all nested parent geographies below either the entire nation (default) or parent geographies provided explicitly and at any legitimate level of granularity through the `within` parameter in the `get_data()` method.
 
 ```python
 import polars as pl
@@ -237,7 +237,20 @@ load_dotenv()
 cdh = CenDatHelper(years=[2022, 2023], key=os.getenv("CENSUS_API_KEY"))
 
 # 2. Find and select products
-# Find the standard 5-year detailed tables, excluding special tables
+# Find the standard 5-year detailed tables
+potential_products = cdh.list_products(
+    to_dicts=True,
+    patterns=[
+        "american community|acs",
+        "5-year",
+        "detailed",
+    ],
+)
+
+for product in potential_products:
+    print(product["title"], product["vintage"])
+
+# Further filter out special population products
 potential_products = cdh.list_products(
     to_dicts=True,
     patterns=[
@@ -254,9 +267,13 @@ for product in potential_products:
 cdh.set_products()
 
 # 3. Find and select geography
-# Set the geography to 'place' (sumlev 160). The success message will inform us
-# that this geography requires 'state' to be specified in the `within` clause.
-cdh.set_geos("160")
+for geo in cdh.list_geos(to_dicts=True):
+    print(geo)
+
+# Set the geography to 'county (or part)' (sumlev 155). The success
+#  message will inform us that this geography requires 'state and 
+#  place' to be specified in the `within` clause.
+cdh.set_geos(["155"])
 
 # 4. Find and select variables
 potential_variables = cdh.list_variables(
@@ -266,23 +283,39 @@ potential_variables = cdh.list_variables(
 for var in potential_variables:
     print(var["name"], var["label"])
 
+# Manually set variables after inspecting the list output
 cdh.set_variables(["B07009_002E", "B16010_009E"])
 
-# 5. Get the data
-# Since we provide no `within`, this will fetch data for all
-#  places in the U.S.
-# Note that `within` is not required for queries of aggregate products and
-#  get_data will issue an API query for every required parent geography. For
-#  places, and with no `within` specified, the below issues 104 queries
-#  (one for each state by year)
-response = cdh.get_data()
+# 5. Get the data - specify all parts in two places from one state 
+#  and parts from all places in another state. This yields 3,233 API 
+#  queries!
+# It's important to not set `max_workers` too high to avoid having
+#  Census block the connection. If that happens (you'll probably 
+#  see an error with 'An existing connection was forcibly closed 
+#  by the remote host'), lower the `max_workers` value and try again 
+#  after a short wait.
+response = cdh.get_data(
+    max_workers=50,
+    within=[
+        {"state": "36", "place": ["61797", "61621"]},
+        {"state": "06"},
+    ],
+)
 
-# 6. Convert and combine DataFrames
-# The result will be a list of DataFrames (one for each product/vintage).
-# We can concatenate them into a single DataFrame for analysis.
-if response and response.to_polars():
-    final_df = pl.concat(response.to_polars())
-    print(final_df.head())
+# 6. Convert and combine DataFrames, forcing estimate variables 
+#  to be integers
+estimates = pl.concat(
+    response.to_polars(
+        schema_overrides={
+            "B07009_002E": pl.Int64,
+            "B16010_009E": pl.Int64,
+        }
+    )
+)
+
+# 7. Inspect
+print(estimates.head())
+
 ```
 
 ## Example 3. Microdata Request
@@ -317,7 +350,8 @@ for product in potential_products:
 # 5. Set the products based on the last (more specific) product listing
 cdh.set_products()
 
-# 6. Explore variables for employment, education, and age (also need to identify weight vars)
+# 6. Explore variables for employment, education, and age 
+#  (also need to identify weight vars)
 potential_variables = cdh.list_variables(
     patterns=[
         "unemployed","school","weight","age",
@@ -334,15 +368,26 @@ cdh.set_variables(["PELKAVL", "PEEDUCA", "PRTAGE", "PWCMPWGT", "PWLGWGT"])
 # 8. Explore geographies
 cdh.list_geos(to_dicts=True)
 
-# 9. Set to state - for microdata, we then need to provide specific state[s] in the `within` clause
+# 9. Set to state - for microdata, we then need to provide 
+#  specific state[s] in the `within` clause
 cdh.set_geos("040")
 
-# 10. Get the data for Colorado
+# 10. Get the data for Colorado (12 concurrent API queries)
 response = cdh.get_data(
     within={'state': '08'}
 )
 
 # 11. Convert to polars df and stack
-dfs = pl.concat(response.to_polars())
+microdata = pl.concat(
+    response.to_polars(
+        schema_overrides={
+            'PELKAVL': pl.Int64,
+            'PEEDUCA': pl.Int64,
+            'PRTAGE': pl.Int64,
+            'PWCMPWGT': pl.Float64,
+            'PWLGWGT': pl.Float64,
+        }
+    )
+)
 
 ```

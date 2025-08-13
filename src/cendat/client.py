@@ -94,6 +94,10 @@ class CenDatResponse:
     def __repr__(self) -> str:
         return f"<CenDatResponse with {len(self._data)} result(s)>"
 
+    def __getitem__(self, index: int) -> Dict:
+        """Allows accessing individual results by index."""
+        return self._data[index]
+
 
 class CenDatHelper:
     """
@@ -137,6 +141,24 @@ class CenDatHelper:
             self.set_years(years)
         if key is not None:
             self.load_key(key)
+
+    # --- CHANGE START: Make the class subscriptable for key attributes ---
+    def __getitem__(self, key: str) -> List[Dict]:
+        """Allows accessing key attributes by name."""
+        if key == "products":
+            return self.products
+        elif key == "geos":
+            return self.geos
+        elif key == "variables":
+            return self.variables
+        elif key == "params":
+            return self.params
+        else:
+            raise KeyError(
+                f"'{key}' is not a valid key. Available keys are: 'products', 'geos', 'variables', 'params'"
+            )
+
+    # --- CHANGE END ---
 
     def set_years(self, years: Union[int, List[int]]):
         """Sets the object's years attribute."""
@@ -513,9 +535,7 @@ class CenDatHelper:
             vars_to_set = self._filtered_variables_cache
         else:
             name_list = [names] if isinstance(names, str) else names
-            # --- FIX START: Ensure a fresh, unfiltered list of variables is used ---
             all_vars = self.list_variables(to_dicts=True, patterns=None)
-            # --- FIX END ---
             vars_to_set = [v for v in all_vars if v.get("name") in name_list]
         if not vars_to_set:
             print("❌ Error: No valid variables were found to set.")
@@ -646,9 +666,7 @@ class CenDatHelper:
         """
         Retrieves data and returns a CenDatResponse object for further processing.
         """
-        # --- FIX START: Always recreate params to reflect the latest state ---
         self._create_params()
-        # --- FIX END ---
 
         if not self.params:
             print(
