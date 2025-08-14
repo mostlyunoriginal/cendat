@@ -142,7 +142,6 @@ class CenDatHelper:
         if key is not None:
             self.load_key(key)
 
-    # --- CHANGE START: Make the class subscriptable for key attributes ---
     def __getitem__(self, key: str) -> List[Dict]:
         """Allows accessing key attributes by name."""
         if key == "products":
@@ -157,8 +156,6 @@ class CenDatHelper:
             raise KeyError(
                 f"'{key}' is not a valid key. Available keys are: 'products', 'geos', 'variables', 'params'"
             )
-
-    # --- CHANGE END ---
 
     def set_years(self, years: Union[int, List[int]]):
         """Sets the object's years attribute."""
@@ -192,12 +189,10 @@ class CenDatHelper:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.JSONDecodeError as e:
-            # This specific error must be caught first.
             print(
                 f"❌ Failed to decode JSON from {url}. Server response: {response.text}"
             )
         except requests.exceptions.RequestException as e:
-            # This will catch other network errors (e.g., 404, 500).
             error_message = str(e)
             if e.response is not None:
                 api_error = e.response.text.strip()
@@ -649,30 +644,6 @@ class CenDatHelper:
                 all_combinations.extend(future.result())
         return all_combinations
 
-    def _explode_params(self):
-        """
-        Expands aggregate data parameters by finding all geographic combinations.
-        """
-        for param in self.params:
-            product_info = next(
-                (p for p in self.products if p["title"] == param["product"]), None
-            )
-            if not product_info or not product_info.get("is_aggregate"):
-                param["combinations"] = [{}]
-                continue
-
-            required_geos = param.get("requires")
-            if not required_geos:
-                param["combinations"] = [{}]
-                continue
-
-            vintage_url = param["url"]
-
-            print(f"ℹ️ Fetching parent geographies for '{param['desc']}'...")
-            combinations = self._get_parent_geo_combinations(vintage_url, required_geos)
-            param["combinations"] = combinations
-            print(f"✅ Found {len(combinations)} combinations for '{param['desc']}'.")
-
     def get_data(
         self,
         within: Union[str, Dict, List[Dict]] = "us",
@@ -688,8 +659,6 @@ class CenDatHelper:
                 "❌ Error: Could not create parameters. Please set geos and variables."
             )
             return CenDatResponse([])
-        if "combinations" not in self.params[0]:
-            self._explode_params()
 
         results_aggregator = {
             i: {"schema": None, "data": []} for i in range(len(self.params))
@@ -707,9 +676,7 @@ class CenDatHelper:
 
             variable_names = ",".join(param["names"])
             target_geo = param["desc"]
-
             vintage_url = param["url"]
-
             context = {"param_index": i}
 
             for within_clause in within_clauses:
@@ -744,25 +711,26 @@ class CenDatHelper:
                     all_tasks.append((vintage_url, api_params, context))
 
                 elif product_info.get("is_aggregate"):
-                    combinations = param.get("combinations", [{}])
+                    # --- CHANGE START: Optimized geo combination logic ---
+                    required_geos = param.get("requires") or []
+
+                    # Determine which parent geos are already provided in the within_clause
+                    provided_geos = {}
                     if isinstance(within_clause, dict):
-                        filtered_combinations = []
-                        for combo in combinations:
-                            is_match = True
-                            for key, value in within_clause.items():
-                                if (
-                                    key not in combo
-                                    or (
-                                        isinstance(value, list)
-                                        and combo[key] not in value
-                                    )
-                                    or (isinstance(value, str) and combo[key] != value)
-                                ):
-                                    is_match = False
-                                    break
-                            if is_match:
-                                filtered_combinations.append(combo)
-                        combinations = filtered_combinations
+                        provided_geos = {
+                            k: v for k, v in within_clause.items() if k in required_geos
+                        }
+
+                    # Determine which parent geos still need to be fetched
+                    geos_to_fetch = [g for g in required_geos if g not in provided_geos]
+
+                    print(f"ℹ️ Fetching parent geographies for '{param['desc']}'...")
+                    combinations = self._get_parent_geo_combinations(
+                        vintage_url, geos_to_fetch, provided_geos
+                    )
+                    print(
+                        f"✅ Found {len(combinations)} combinations for '{param['desc']}' within the specified scope."
+                    )
 
                     for combo in combinations:
                         api_params = {"get": variable_names}
@@ -772,6 +740,7 @@ class CenDatHelper:
                             )
                         api_params["for"] = f"{target_geo}:*"
                         all_tasks.append((vintage_url, api_params, context))
+                    # --- CHANGE END ---
 
         if not all_tasks:
             print("❌ Error: Could not determine any API calls to make.")
