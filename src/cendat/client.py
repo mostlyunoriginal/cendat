@@ -1,5 +1,6 @@
 import re
 import requests
+import itertools
 from typing import List, Union, Dict, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -618,7 +619,13 @@ class CenDatHelper:
         remaining_levels = required_geos[1:]
         params = {"get": "NAME", "for": f"{level_to_fetch}:*"}
         if current_in_clause:
-            params["in"] = " ".join([f"{k}:{v}" for k, v in current_in_clause.items()])
+            in_parts = []
+            for k, v in current_in_clause.items():
+                if isinstance(v, list):
+                    in_parts.append(f"{k}:{','.join(v)}")
+                else:
+                    in_parts.append(f"{k}:{v}")
+            params["in"] = " ".join(in_parts)
         data = self._get_json_from_url(base_url, params)
         if not data or len(data) < 2:
             return []
@@ -665,7 +672,30 @@ class CenDatHelper:
         }
         all_tasks = []
 
-        within_clauses = within if isinstance(within, list) else [within]
+        raw_within_clauses = within if isinstance(within, list) else [within]
+
+        # --- FIX START: Correctly expand within clauses containing lists into multiple queries ---
+        expanded_within_clauses = []
+        for clause in raw_within_clauses:
+            if not isinstance(clause, dict):
+                expanded_within_clauses.append(clause)
+                continue
+
+            # Separate keys with list values from those with single values
+            list_items = {k: v for k, v in clause.items() if isinstance(v, list)}
+            single_items = {k: v for k, v in clause.items() if not isinstance(v, list)}
+
+            if not list_items:
+                expanded_within_clauses.append(clause)
+                continue
+
+            # Create all combinations of the list values
+            keys, values = zip(*list_items.items())
+            for v_combination in itertools.product(*values):
+                new_clause = single_items.copy()
+                new_clause.update(dict(zip(keys, v_combination)))
+                expanded_within_clauses.append(new_clause)
+        # --- FIX END ---
 
         for i, param in enumerate(self.params):
             product_info = next(
@@ -679,7 +709,7 @@ class CenDatHelper:
             vintage_url = param["url"]
             context = {"param_index": i}
 
-            for within_clause in within_clauses:
+            for within_clause in expanded_within_clauses:
                 if product_info.get("is_microdata"):
                     if not isinstance(within_clause, dict):
                         print(
@@ -696,10 +726,12 @@ class CenDatHelper:
                         )
                         continue
 
-                    if isinstance(target_geo_codes, str):
-                        target_geo_codes = [target_geo_codes]
+                    codes_str = (
+                        target_geo_codes
+                        if isinstance(target_geo_codes, str)
+                        else ",".join(target_geo_codes)
+                    )
 
-                    codes_str = ",".join(target_geo_codes)
                     api_params = {
                         "get": variable_names,
                         "for": f"{target_geo}:{codes_str}",
@@ -711,17 +743,14 @@ class CenDatHelper:
                     all_tasks.append((vintage_url, api_params, context))
 
                 elif product_info.get("is_aggregate"):
-                    # --- CHANGE START: Optimized geo combination logic ---
                     required_geos = param.get("requires") or []
 
-                    # Determine which parent geos are already provided in the within_clause
                     provided_geos = {}
                     if isinstance(within_clause, dict):
                         provided_geos = {
                             k: v for k, v in within_clause.items() if k in required_geos
                         }
 
-                    # Determine which parent geos still need to be fetched
                     geos_to_fetch = [g for g in required_geos if g not in provided_geos]
 
                     print(f"ℹ️ Fetching parent geographies for '{param['desc']}'...")
@@ -740,7 +769,6 @@ class CenDatHelper:
                             )
                         api_params["for"] = f"{target_geo}:*"
                         all_tasks.append((vintage_url, api_params, context))
-                    # --- CHANGE END ---
 
         if not all_tasks:
             print("❌ Error: Could not determine any API calls to make.")
