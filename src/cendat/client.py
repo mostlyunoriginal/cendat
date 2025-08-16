@@ -177,7 +177,7 @@ class CenDatHelper:
             print("⚠️ No API key provided. API requests may have stricter rate limits.")
 
     def _get_json_from_url(
-        self, url: str, params: Optional[Dict] = None
+        self, url: str, params: Optional[Dict] = None, timeout: int = 30
     ) -> Optional[List[List[str]]]:
         """Helper to fetch and parse JSON from a URL."""
         if not params:
@@ -186,7 +186,7 @@ class CenDatHelper:
             params["key"] = self.__key
 
         try:
-            response = requests.get(url, params=params, timeout=30)
+            response = requests.get(url, params=params, timeout=timeout)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.JSONDecodeError as e:
@@ -655,6 +655,7 @@ class CenDatHelper:
         self,
         within: Union[str, Dict, List[Dict]] = "us",
         max_workers: Optional[int] = 100,
+        timeout: int = 30,
     ) -> "CenDatResponse":
         """
         Retrieves data and returns a CenDatResponse object for further processing.
@@ -777,7 +778,7 @@ class CenDatHelper:
         print(f"ℹ️ Making {len(all_tasks)} API call(s)...")
         with ThreadPoolExecutor(max_workers=max_workers or len(all_tasks)) as executor:
             future_to_context = {
-                executor.submit(self._get_json_from_url, url, params): context
+                executor.submit(self._get_json_from_url, url, params, timeout): context
                 for url, params, context in all_tasks
             }
             for future in as_completed(future_to_context):
