@@ -15,7 +15,7 @@ class CenDatResponse:
         self._data = data
 
     def to_polars(
-        self, schema_overrides: Optional[Dict] = None
+        self, schema_overrides: Optional[Dict] = None, concat: bool = False
     ) -> List["pl.DataFrame"]:
         """
         Converts the response data into a list of Polars DataFrames.
@@ -55,9 +55,11 @@ class CenDatResponse:
                 ]
             )
             dataframes.append(df)
-        return dataframes
+        return pl.concat(dataframes) if concat else dataframes
 
-    def to_pandas(self, dtypes: Optional[Dict] = None) -> List["pd.DataFrame"]:
+    def to_pandas(
+        self, dtypes: Optional[Dict] = None, concat: bool = False
+    ) -> List["pd.DataFrame"]:
         """
         Converts the response data into a list of Pandas DataFrames.
 
@@ -90,7 +92,7 @@ class CenDatResponse:
             df["sumlev"] = item["sumlev"]
             df["desc"] = item["desc"]
             dataframes.append(df)
-        return dataframes
+        return pd.concat(dataframes, ignore_index=True) if concat else dataframes
 
     def __repr__(self) -> str:
         return f"<CenDatResponse with {len(self._data)} result(s)>"
