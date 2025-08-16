@@ -608,7 +608,11 @@ class CenDatHelper:
             )
 
     def _get_parent_geo_combinations(
-        self, base_url: str, required_geos: List[str], current_in_clause: Dict = {}
+        self,
+        base_url: str,
+        required_geos: List[str],
+        current_in_clause: Dict = {},
+        timeout: int = 30,
     ) -> List[Dict]:
         """
         Recursively fetches all valid combinations of parent geographies for aggregate data.
@@ -626,7 +630,7 @@ class CenDatHelper:
                 else:
                     in_parts.append(f"{k}:{v}")
             params["in"] = " ".join(in_parts)
-        data = self._get_json_from_url(base_url, params)
+        data = self._get_json_from_url(base_url, params, timeout=timeout)
         if not data or len(data) < 2:
             return []
         try:
@@ -644,6 +648,7 @@ class CenDatHelper:
                     base_url,
                     remaining_levels,
                     {**current_in_clause, level_to_fetch: row[fips_index]},
+                    timeout=timeout,
                 ): row[fips_index]
                 for row in data[1:]
             }
@@ -756,7 +761,7 @@ class CenDatHelper:
 
                     print(f"ℹ️ Fetching parent geographies for '{param['desc']}'...")
                     combinations = self._get_parent_geo_combinations(
-                        vintage_url, geos_to_fetch, provided_geos
+                        vintage_url, geos_to_fetch, provided_geos, timeout=timeout
                     )
                     print(
                         f"✅ Found {len(combinations)} combinations for '{param['desc']}' within the specified scope."
