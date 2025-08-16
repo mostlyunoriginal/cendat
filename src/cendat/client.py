@@ -500,8 +500,8 @@ class CenDatHelper:
                 )
         result_list = flat_variable_list
 
-        if match_in not in ["label", "name"]:
-            print("❌ Error: `match_in` must be either 'label' or 'name'.")
+        if match_in not in ["label", "name", "concept"]:
+            print("❌ Error: `match_in` must be either 'label', 'name', or 'concept'.")
             return []
 
         if patterns:
