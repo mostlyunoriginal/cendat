@@ -139,6 +139,7 @@ class CenDatHelper:
         self._filtered_products_cache: Optional[List[Dict]] = None
         self._filtered_geos_cache: Optional[List[Dict]] = None
         self._filtered_variables_cache: Optional[List[Dict]] = None
+        self.n_calls: Optional[int] = None
 
         if years is not None:
             self.set_years(years)
@@ -155,9 +156,11 @@ class CenDatHelper:
             return self.variables
         elif key == "params":
             return self.params
+        elif key == "n_calls":
+            return self.n_calls
         else:
             raise KeyError(
-                f"'{key}' is not a valid key. Available keys are: 'products', 'geos', 'variables', 'params'"
+                f"'{key}' is not a valid key. Available keys are: 'products', 'geos', 'variables', 'params', 'n_calls'"
             )
 
     def set_years(self, years: Union[int, List[int]]):
@@ -663,6 +666,7 @@ class CenDatHelper:
         within: Union[str, Dict, List[Dict]] = "us",
         max_workers: Optional[int] = 100,
         timeout: int = 30,
+        preview_only: bool = False,
     ) -> "CenDatResponse":
         """
         Retrieves data and returns a CenDatResponse object for further processing.
@@ -782,27 +786,36 @@ class CenDatHelper:
             print("❌ Error: Could not determine any API calls to make.")
             return CenDatResponse([])
 
-        print(f"ℹ️ Making {len(all_tasks)} API call(s)...")
-        with ThreadPoolExecutor(max_workers=max_workers or len(all_tasks)) as executor:
-            future_to_context = {
-                executor.submit(self._get_json_from_url, url, params, timeout): context
-                for url, params, context in all_tasks
-            }
-            for future in as_completed(future_to_context):
-                context = future_to_context[future]
-                param_index = context["param_index"]
-                try:
-                    data = future.result()
-                    if data and len(data) > 1:
-                        if results_aggregator[param_index]["schema"] is None:
-                            results_aggregator[param_index]["schema"] = data[0]
-                        results_aggregator[param_index]["data"].extend(data[1:])
-                except Exception as exc:
-                    print(f"❌ Task for {context} generated an exception: {exc}")
+        self.n_calls = len(all_tasks)
 
-        for i, param in enumerate(self.params):
-            aggregated_result = results_aggregator[i]
-            param["schema"] = aggregated_result["schema"]
-            param["data"] = aggregated_result["data"]
+        if preview_only:
+            print(f"ℹ️ Preview: this will yield {self.n_calls} API call(s).")
+        else:
+            print(f"ℹ️ Making {self.n_calls} API call(s)...")
+            with ThreadPoolExecutor(
+                max_workers=max_workers or self.n_calls
+            ) as executor:
+                future_to_context = {
+                    executor.submit(
+                        self._get_json_from_url, url, params, timeout
+                    ): context
+                    for url, params, context in all_tasks
+                }
+                for future in as_completed(future_to_context):
+                    context = future_to_context[future]
+                    param_index = context["param_index"]
+                    try:
+                        data = future.result()
+                        if data and len(data) > 1:
+                            if results_aggregator[param_index]["schema"] is None:
+                                results_aggregator[param_index]["schema"] = data[0]
+                            results_aggregator[param_index]["data"].extend(data[1:])
+                    except Exception as exc:
+                        print(f"❌ Task for {context} generated an exception: {exc}")
 
-        return CenDatResponse(self.params)
+            for i, param in enumerate(self.params):
+                aggregated_result = results_aggregator[i]
+                param["schema"] = aggregated_result["schema"]
+                param["data"] = aggregated_result["data"]
+
+            return CenDatResponse(self.params)
