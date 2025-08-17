@@ -625,6 +625,7 @@ class CenDatHelper:
         required_geos: List[str],
         current_in_clause: Dict = {},
         timeout: int = 30,
+        max_workers: Optional[int] = None,
     ) -> List[Dict]:
         """
         Recursively fetches all valid combinations of parent geographies for aggregate data.
@@ -653,7 +654,7 @@ class CenDatHelper:
             )
             return []
         all_combinations = []
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_fips = {
                 executor.submit(
                     self._get_parent_geo_combinations,
@@ -774,7 +775,11 @@ class CenDatHelper:
 
                     print(f"ℹ️ Fetching parent geographies for '{param['desc']}'...")
                     combinations = self._get_parent_geo_combinations(
-                        vintage_url, geos_to_fetch, provided_geos, timeout=timeout
+                        vintage_url,
+                        geos_to_fetch,
+                        provided_geos,
+                        timeout=timeout,
+                        max_workers=max_workers,
                     )
                     print(
                         f"✅ Found {len(combinations)} combinations for '{param['desc']}' within the specified scope."
@@ -799,9 +804,7 @@ class CenDatHelper:
             print(f"ℹ️ Preview: this will yield {self.n_calls} API call(s).")
         else:
             print(f"ℹ️ Making {self.n_calls} API call(s)...")
-            with ThreadPoolExecutor(
-                max_workers=max_workers or self.n_calls
-            ) as executor:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_to_context = {
                     executor.submit(
                         self._get_json_from_url, url, params, timeout
