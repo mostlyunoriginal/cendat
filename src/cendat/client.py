@@ -15,7 +15,7 @@ class CenDatResponse:
         self._data = data
 
     def to_polars(
-        self, schema_overrides: Optional[Dict] = None
+        self, schema_overrides: Optional[Dict] = None, concat: bool = False
     ) -> List["pl.DataFrame"]:
         """
         Converts the response data into a list of Polars DataFrames.
@@ -55,9 +55,11 @@ class CenDatResponse:
                 ]
             )
             dataframes.append(df)
-        return dataframes
+        return pl.concat(dataframes) if concat else dataframes
 
-    def to_pandas(self, dtypes: Optional[Dict] = None) -> List["pd.DataFrame"]:
+    def to_pandas(
+        self, dtypes: Optional[Dict] = None, concat: bool = False
+    ) -> List["pd.DataFrame"]:
         """
         Converts the response data into a list of Pandas DataFrames.
 
@@ -90,7 +92,7 @@ class CenDatResponse:
             df["sumlev"] = item["sumlev"]
             df["desc"] = item["desc"]
             dataframes.append(df)
-        return dataframes
+        return pd.concat(dataframes, ignore_index=True) if concat else dataframes
 
     def __repr__(self) -> str:
         return f"<CenDatResponse with {len(self._data)} result(s)>"
@@ -137,6 +139,7 @@ class CenDatHelper:
         self._filtered_products_cache: Optional[List[Dict]] = None
         self._filtered_geos_cache: Optional[List[Dict]] = None
         self._filtered_variables_cache: Optional[List[Dict]] = None
+        self.n_calls: Optional[int] = None
 
         if years is not None:
             self.set_years(years)
@@ -153,9 +156,11 @@ class CenDatHelper:
             return self.variables
         elif key == "params":
             return self.params
+        elif key == "n_calls":
+            return self.n_calls
         else:
             raise KeyError(
-                f"'{key}' is not a valid key. Available keys are: 'products', 'geos', 'variables', 'params'"
+                f"'{key}' is not a valid key. Available keys are: 'products', 'geos', 'variables', 'params', 'n_calls'"
             )
 
     def set_years(self, years: Union[int, List[int]]):
@@ -177,7 +182,7 @@ class CenDatHelper:
             print("⚠️ No API key provided. API requests may have stricter rate limits.")
 
     def _get_json_from_url(
-        self, url: str, params: Optional[Dict] = None
+        self, url: str, params: Optional[Dict] = None, timeout: int = 30
     ) -> Optional[List[List[str]]]:
         """Helper to fetch and parse JSON from a URL."""
         if not params:
@@ -186,12 +191,19 @@ class CenDatHelper:
             params["key"] = self.__key
 
         try:
-            response = requests.get(url, params=params, timeout=30)
+            response = requests.get(url, params=params, timeout=timeout)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.JSONDecodeError as e:
+            print(f"❌ Failed to decode JSON from {url}. Server response: {e}")
+            params_minus = {key: value for key, value in params.items() if key != "key"}
+            print(f"Query parameters: {params_minus}")
             print(
-                f"❌ Failed to decode JSON from {url}. Server response: {response.text}"
+                "Note: this may be the result of the 'in' geography being a special case "
+                "in which the 'for' summary level does not exist. All valid parent geographies "
+                "are queried without regard for whether or not the requested summary level exists "
+                "within them. If this is the case, your results will still be valid (barring other "
+                "errors)."
             )
         except requests.exceptions.RequestException as e:
             error_message = str(e)
@@ -498,8 +510,8 @@ class CenDatHelper:
                 )
         result_list = flat_variable_list
 
-        if match_in not in ["label", "name"]:
-            print("❌ Error: `match_in` must be either 'label' or 'name'.")
+        if match_in not in ["label", "name", "concept"]:
+            print("❌ Error: `match_in` must be either 'label', 'name', or 'concept'.")
             return []
 
         if patterns:
@@ -560,7 +572,7 @@ class CenDatHelper:
             ):
                 collapsed_vars[key][collapsed].append(var_info[granular])
         self.variables = list(collapsed_vars.values())
-        print(f"✅ Variables set:")
+        print("✅ Variables set:")
         for var_group in self.variables:
             print(
                 f"  - Product: {var_group['product']} (Vintage: {var_group['vintage']})"
@@ -608,7 +620,12 @@ class CenDatHelper:
             )
 
     def _get_parent_geo_combinations(
-        self, base_url: str, required_geos: List[str], current_in_clause: Dict = {}
+        self,
+        base_url: str,
+        required_geos: List[str],
+        current_in_clause: Dict = {},
+        timeout: int = 30,
+        max_workers: Optional[int] = None,
     ) -> List[Dict]:
         """
         Recursively fetches all valid combinations of parent geographies for aggregate data.
@@ -626,7 +643,7 @@ class CenDatHelper:
                 else:
                     in_parts.append(f"{k}:{v}")
             params["in"] = " ".join(in_parts)
-        data = self._get_json_from_url(base_url, params)
+        data = self._get_json_from_url(base_url, params, timeout=timeout)
         if not data or len(data) < 2:
             return []
         try:
@@ -637,13 +654,14 @@ class CenDatHelper:
             )
             return []
         all_combinations = []
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_fips = {
                 executor.submit(
                     self._get_parent_geo_combinations,
                     base_url,
                     remaining_levels,
                     {**current_in_clause, level_to_fetch: row[fips_index]},
+                    timeout=timeout,
                 ): row[fips_index]
                 for row in data[1:]
             }
@@ -655,6 +673,8 @@ class CenDatHelper:
         self,
         within: Union[str, Dict, List[Dict]] = "us",
         max_workers: Optional[int] = 100,
+        timeout: int = 30,
+        preview_only: bool = False,
     ) -> "CenDatResponse":
         """
         Retrieves data and returns a CenDatResponse object for further processing.
@@ -755,7 +775,11 @@ class CenDatHelper:
 
                     print(f"ℹ️ Fetching parent geographies for '{param['desc']}'...")
                     combinations = self._get_parent_geo_combinations(
-                        vintage_url, geos_to_fetch, provided_geos
+                        vintage_url,
+                        geos_to_fetch,
+                        provided_geos,
+                        timeout=timeout,
+                        max_workers=max_workers,
                     )
                     print(
                         f"✅ Found {len(combinations)} combinations for '{param['desc']}' within the specified scope."
@@ -774,27 +798,34 @@ class CenDatHelper:
             print("❌ Error: Could not determine any API calls to make.")
             return CenDatResponse([])
 
-        print(f"ℹ️ Making {len(all_tasks)} API call(s)...")
-        with ThreadPoolExecutor(max_workers=max_workers or len(all_tasks)) as executor:
-            future_to_context = {
-                executor.submit(self._get_json_from_url, url, params): context
-                for url, params, context in all_tasks
-            }
-            for future in as_completed(future_to_context):
-                context = future_to_context[future]
-                param_index = context["param_index"]
-                try:
-                    data = future.result()
-                    if data and len(data) > 1:
-                        if results_aggregator[param_index]["schema"] is None:
-                            results_aggregator[param_index]["schema"] = data[0]
-                        results_aggregator[param_index]["data"].extend(data[1:])
-                except Exception as exc:
-                    print(f"❌ Task for {context} generated an exception: {exc}")
+        self.n_calls = len(all_tasks)
 
-        for i, param in enumerate(self.params):
-            aggregated_result = results_aggregator[i]
-            param["schema"] = aggregated_result["schema"]
-            param["data"] = aggregated_result["data"]
+        if preview_only:
+            print(f"ℹ️ Preview: this will yield {self.n_calls} API call(s).")
+        else:
+            print(f"ℹ️ Making {self.n_calls} API call(s)...")
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_context = {
+                    executor.submit(
+                        self._get_json_from_url, url, params, timeout
+                    ): context
+                    for url, params, context in all_tasks
+                }
+                for future in as_completed(future_to_context):
+                    context = future_to_context[future]
+                    param_index = context["param_index"]
+                    try:
+                        data = future.result()
+                        if data and len(data) > 1:
+                            if results_aggregator[param_index]["schema"] is None:
+                                results_aggregator[param_index]["schema"] = data[0]
+                            results_aggregator[param_index]["data"].extend(data[1:])
+                    except Exception as exc:
+                        print(f"❌ Task for {context} generated an exception: {exc}")
 
-        return CenDatResponse(self.params)
+            for i, param in enumerate(self.params):
+                aggregated_result = results_aggregator[i]
+                param["schema"] = aggregated_result["schema"]
+                param["data"] = aggregated_result["data"]
+
+            return CenDatResponse(self.params)

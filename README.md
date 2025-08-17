@@ -82,9 +82,9 @@ Lists available data products, filtered by year and search patterns.
 
 * **`years`** (`int` | `list[int]`, optional): Filters products available for the specified year(s). Defaults to the years set on the object.
 * **`patterns`** (`str` | `list[str]`, optional): Regex pattern(s) to search for within the product metadata.
-* **`to_dicts`** (`bool`, optional): If `True` (default), returns a list of dictionaries with full product details. If `False`, returns a list of product titles.
-* **`logic`** (`callable`, optional): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
-* **`match_in`** (`str`, optional): The field to match patterns against. Can be `'title'` (default) or `'desc'`.
+* **`to_dicts`** (`bool`): If `True` (default), returns a list of dictionaries with full product details. If `False`, returns a list of product titles.
+* **`logic`** (`callable`): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
+* **`match_in`** (`str`): The field to match patterns against. Can be `'title'` (default) or `'desc'`.
 
 ### `set_products(self, titles=None)`
 
@@ -96,25 +96,25 @@ Sets the active data products for the session.
 
 Lists available geographies for the currently set products.
 
-* **`to_dicts`** (`bool`, optional): If `True`, returns a list of dictionaries with full geography details. If `False` (default), returns a list of unique summary level (`sumlev`) strings.
+* **`to_dicts`** (`bool`): If `True`, returns a list of dictionaries with full geography details. If `False` (default), returns a list of unique summary level (`sumlev`) strings.
 * **`patterns`** (`str` | `list[str]`, optional): Regex pattern(s) to search for within the geography description.
-* **`logic`** (`callable`, optional): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
+* **`logic`** (`callable`): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
 
 ### `set_geos(self, values=None, by='sumlev')`
 
 Sets the active geographies for the session.
 
 * **`values`** (`str` | `list[str]`, optional): The geography values to set. If `None`, sets all geos from the last `list_geos()` call.
-* **`by`** (`str`, optional): The key to use for matching `values`. Must be either `'sumlev'` (default) or `'desc'`.
+* **`by`** (`str`): The key to use for matching `values`. Must be either `'sumlev'` (default) or `'desc'`.
 
 ### `list_variables(self, to_dicts=True, patterns=None, logic=all, match_in='label')`
 
 Lists available variables for the currently set products.
 
-* **`to_dicts`** (`bool`, optional): If `True` (default), returns a list of dictionaries with full variable details. If `False`, returns a list of unique variable names.
+* **`to_dicts`** (`bool`): If `True` (default), returns a list of dictionaries with full variable details. If `False`, returns a list of unique variable names.
 * **`patterns`** (`str` | `list[str]`, optional): Regex pattern(s) to search for within the variable metadata.
-* **`logic`** (`callable`, optional): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
-* **`match_in`** (`str`, optional): The field to match patterns against. Can be `'label'` (default) or `'name'`.
+* **`logic`** (`callable`): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
+* **`match_in`** (`str`): The field to match patterns against. Can be `'label'` (default), `'name'` or `'concept'`.
 
 ### `set_variables(self, names=None)`
 
@@ -138,17 +138,21 @@ Executes the API calls based on the set parameters and retrieves the data.
 
 A container for the data returned by `CenDatHelper.get_data()`.
 
-### `to_polars(self, schema_overrides=None)`
+### `to_polars(self, schema_overrides=None, concat=False)`
 
 Converts the raw response data into a list of Polars DataFrames.
 
 * **`schema_overrides`** (`dict`, optional): A dictionary mapping column names to Polars data types to override the inferred schema. Example: `{'POP': pl.Int64}`.
 
-### `to_pandas(self, dtypes=None)`
+* **`concat`** (`bool`): If `True`, DataFrames are concatenated across response list items.
+
+### `to_pandas(self, dtypes=None, concat=False)`
 
 Converts the raw response data into a list of Pandas DataFrames.
 
 * **`dtypes`** (`dict`, optional): A dictionary mapping column names to Pandas data types, which is passed to the `.astype()` method. Example: `{'POP': 'int64'}`.
+
+* **`concat`** (`bool`): If `True`, DataFrames are concatenated across response list items.
 
 # Usage Examples
 
@@ -223,10 +227,8 @@ for detail in ["products", "geos", "variables"]:
 # 7. Convert to a DataFrame
 # The response object can be converted to a list of Polars DataFrames 
 #  which itself is easily concatenated (assuming the products are compatible)
-pums_dataframes = response.to_polars()
-if pums_dataframes:
-    pums_df = pl.concat(pums_dataframes)
-    print(pums_df.head())
+pums_df = response.to_polars(concat=True)
+
 ```
 
 ## Example 2: Aggregate Data Request
@@ -311,14 +313,14 @@ response = cdh.get_data(
 
 # 6. Convert and combine DataFrames, forcing estimate variables 
 #  to be integers
-estimates = pl.concat(
-    response.to_polars(
-        schema_overrides={
-            "B07009_002E": pl.Int64,
-            "B16010_009E": pl.Int64,
-        }
-    )
+estimates = response.to_polars(
+    schema_overrides={
+        "B07009_002E": pl.Int64,
+        "B16010_009E": pl.Int64,
+    },
+    concat=True,
 )
+
 
 # 7. Inspect
 print(estimates.head())
@@ -385,16 +387,16 @@ response = cdh.get_data(
 )
 
 # 11. Convert to polars df and stack
-microdata = pl.concat(
-    response.to_polars(
-        schema_overrides={
-            'PELKAVL': pl.Int64,
-            'PEEDUCA': pl.Int64,
-            'PRTAGE': pl.Int64,
-            'PWCMPWGT': pl.Float64,
-            'PWLGWGT': pl.Float64,
-        }
-    )
+microdata = response.to_polars(
+    schema_overrides={
+        'PELKAVL': pl.Int64,
+        'PEEDUCA': pl.Int64,
+        'PRTAGE': pl.Int64,
+        'PWCMPWGT': pl.Float64,
+        'PWLGWGT': pl.Float64,
+    },
+    concat=True,
 )
+
 
 ```
