@@ -1,10 +1,8 @@
 # tests/test_cendat.py
 
 import pytest
-from unittest.mock import patch, Mock, ANY
-import json
-from pathlib import Path
-from cendat import CenDatHelper, CenDatResponse
+from unittest.mock import patch, Mock
+from cendat.client import CenDatHelper, CenDatResponse
 
 # --- 1. Mock Data ---
 

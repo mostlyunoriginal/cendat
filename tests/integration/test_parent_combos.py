@@ -1,6 +1,7 @@
 import polars as pl
 import os
 from dotenv import load_dotenv
+import pytest
 
 load_dotenv()
 from cendat.client import CenDatHelper
@@ -42,6 +43,7 @@ c.set_products()
 c.set_variables("H9_001N")
 
 
+@pytest.mark.integration
 def test_n_calls_counties():
 
     check_calls = confirm_src["counties"].get_column("STATEFP").unique().len()
@@ -52,6 +54,7 @@ def test_n_calls_counties():
     assert c["n_calls"] == check_calls
 
 
+@pytest.mark.integration
 def test_n_calls_county_subs():
 
     check_calls = (
@@ -71,6 +74,7 @@ def test_n_calls_county_subs():
     assert c["n_calls"] == check_calls
 
 
+@pytest.mark.integration
 def test_n_calls_tracts():
 
     check_calls = confirm_src["tracts"].select(["STATEFP", "COUNTYFP"]).unique().height
@@ -83,6 +87,7 @@ def test_n_calls_tracts():
     assert c["n_calls"] == check_calls
 
 
+@pytest.mark.integration
 def test_n_calls_block_groups():
 
     check_calls = (
@@ -98,6 +103,7 @@ def test_n_calls_block_groups():
     assert c["n_calls"] == check_calls
 
 
+@pytest.mark.integration
 def test_n_calls_places():
 
     check_calls = (
@@ -114,6 +120,7 @@ def test_n_calls_places():
     assert c["n_calls"] == check_calls
 
 
+@pytest.mark.integration
 def test_n_calls_places_by_county():
 
     check_calls = (
