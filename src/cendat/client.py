@@ -195,8 +195,15 @@ class CenDatHelper:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.JSONDecodeError as e:
+            print(f"❌ Failed to decode JSON from {url}. Server response: {e}")
+            params_minus = {key: value for key, value in params.items() if key != "key"}
+            print(f"Query parameters: {params_minus}")
             print(
-                f"❌ Failed to decode JSON from {url}. Server response: {response.text}"
+                "Note: this may be the result of the 'in' geography being a special case "
+                "in which the 'for' summary level does not exist. All valid parent geographies "
+                "are queried without regard for whether or not the requested summary level exists "
+                "within them. If this is the case, your results will still be valid (barring other "
+                "errors)."
             )
         except requests.exceptions.RequestException as e:
             error_message = str(e)
@@ -565,7 +572,7 @@ class CenDatHelper:
             ):
                 collapsed_vars[key][collapsed].append(var_info[granular])
         self.variables = list(collapsed_vars.values())
-        print(f"✅ Variables set:")
+        print("✅ Variables set:")
         for var_group in self.variables:
             print(
                 f"  - Product: {var_group['product']} (Vintage: {var_group['vintage']})"
