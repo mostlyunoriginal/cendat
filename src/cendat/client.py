@@ -1,6 +1,8 @@
 import re
 import requests
 import itertools
+import operator
+import ast
 from typing import List, Union, Dict, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -13,6 +15,62 @@ class CenDatResponse:
 
     def __init__(self, data: List[Dict]):
         self._data = data
+        self.OPERATOR_MAP = {
+            ">": operator.gt,
+            "<": operator.lt,
+            ">=": operator.ge,
+            "<=": operator.le,
+            "==": operator.eq,
+            "!=": operator.ne,
+            "in": lambda a, b: a in b,
+            "not in": lambda a, b: a not in b,
+        }
+        self.ALLOWED_OPERATORS = set(self.OPERATOR_MAP.keys())
+
+    def build_safe_checker(self, condition_string: str):
+        """
+        Parses a condition string, validates it, and returns a function
+        that performs the check on a dictionary row.
+        """
+
+        patternL = re.compile(
+            r"^\s*("
+            + "|".join(col for col in self.ALLOWED_COLUMNS)
+            + r")\s*("
+            + "|".join(re.escape(op) for op in self.ALLOWED_OPERATORS)
+            + r")\s*(.+)\s*$"
+        )
+        patternR = re.compile(
+            r"^\s*(.+)\s*("
+            + "|".join(re.escape(op) for op in self.ALLOWED_OPERATORS)
+            + r")\s*("
+            + "|".join(col for col in self.ALLOWED_COLUMNS)
+            + r")\s*$"
+        )
+        matchL = patternL.match(condition_string)
+        matchR = patternR.match(condition_string)
+
+        if not (matchL or matchR):
+            raise ValueError(f"Invalid condition format: '{condition_string}'")
+
+        if matchL:
+            variable, op_string, value_string = matchL.groups()
+        else:
+            value_string, op_string, variable = matchR.groups()
+
+        if variable not in self.ALLOWED_COLUMNS:
+            raise ValueError(f"Invalid column name: '{variable}'")
+
+        op_func = self.OPERATOR_MAP[op_string]
+
+        try:
+            value = ast.literal_eval(value_string)
+        except (ValueError, SyntaxError):
+            raise ValueError(f"Invalid value format: '{value_string}'")
+
+        return lambda row: (
+            op_func(row[variable], value) if matchL else op_func(value, row[variable])
+        )
 
     def to_polars(
         self, schema_overrides: Optional[Dict] = None, concat: bool = False
@@ -55,7 +113,7 @@ class CenDatResponse:
                 ]
             )
             dataframes.append(df)
-        return pl.concat(dataframes) if concat else dataframes
+        return pl.concat(dataframes, how="diagonal") if concat else dataframes
 
     def to_pandas(
         self, dtypes: Optional[Dict] = None, concat: bool = False
