@@ -9,11 +9,25 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class CenDatResponse:
     """
-    A container for the data returned by the CenDatHelper.get_data() method.
-    Provides methods to easily convert the raw data into Polars or Pandas DataFrames.
+    A container for data returned by CenDatHelper.get_data().
+
+    This class holds the raw JSON response from the Census API and provides
+    methods to easily filter, tabulate, and convert the data into Polars or
+    Pandas DataFrames for analysis.
+
+    Attributes:
+        _data (List[Dict]): The raw data structure from the API calls.
+        all_columns (set): A set of all unique column names found in the data.
     """
 
     def __init__(self, data: List[Dict]):
+        """
+        Initializes the CenDatResponse object.
+
+        Args:
+            data (List[Dict]): The list of dictionaries representing the
+                               API response data, typically from CenDatHelper.
+        """
         self._data = data
         self.OPERATOR_MAP = {
             ">": operator.gt,
@@ -26,22 +40,35 @@ class CenDatResponse:
             "not in": lambda a, b: a not in b,
         }
         self.ALLOWED_OPERATORS = set(self.OPERATOR_MAP.keys())
+        self.all_columns = set(
+            col for item in self._data for col in item.get("schema", [])
+        )
 
-    def _build_safe_checker(self, condition_string: str):
+    def _build_safe_checker(self, condition_string: str) -> Callable:
         """
-        Parses a condition string, validates it, and returns a function
-        that performs the check on a dictionary row.
+        Parses a condition string and returns a function to check it.
+
+        This internal method uses regex to safely parse a condition like
+        "AGE > 50" or "10 in MY_VAR", validates the column name and operator,
+        and returns a callable function that can be applied to a data row (dict).
+
+        Args:
+            condition_string (str): The condition to parse (e.g., "POP >= 1000").
+
+        Returns:
+            Callable: A function that takes a dictionary row and returns True or False.
+
+        Raises:
+            ValueError: If the condition string format, column name, or value
+                        is invalid.
         """
 
-        # FIX: Build the list of valid columns from the 'schema' which contains ALL returned columns,
-        # not just 'names' which only contains requested variables.
-        all_columns = set(col for item in self._data for col in item.get("schema", []))
-        if not all_columns:
+        if not self.all_columns:
             # Fallback or handle case with no data/names
             all_columns_pattern = ""
         else:
             # FIX: Add re.escape() to handle column names with special regex characters.
-            all_columns_pattern = "|".join(re.escape(col) for col in all_columns)
+            all_columns_pattern = "|".join(re.escape(col) for col in self.all_columns)
 
         patternL = re.compile(
             r"^\s*("
@@ -68,7 +95,7 @@ class CenDatResponse:
         else:
             value_string, op_string, variable = matchR.groups()
 
-        if variable not in all_columns:
+        if variable not in self.all_columns:
             raise ValueError(f"Invalid column name: '{variable}'")
 
         op_func = self.OPERATOR_MAP[op_string]
@@ -84,8 +111,23 @@ class CenDatResponse:
 
     def _prepare_dataframe_data(self, destring: bool, _data: Optional[List[Dict]]):
         """
-        Internal generator to handle common data preparation for DataFrame conversion.
-        It yields the source item, the processed data, and the appropriate orientation.
+        Prepares and yields data for DataFrame conversion.
+
+        This internal generator iterates through the data source, handles the
+        'destringing' of values (converting string numbers to numeric types),
+        and yields the processed data in a format suitable for DataFrame
+        constructors.
+
+        Args:
+            destring (bool): If True, attempts to convert string representations
+                             of numbers into native numeric types.
+            _data (Optional[List[Dict]]): An optional alternative data source to
+                                          process, used internally by `tabulate`.
+
+        Yields:
+            tuple: A tuple containing the source item (dict), the processed data
+                   (list of lists or list of dicts), and the orientation
+                   ("row" or "dicts").
         """
         data_source = _data if _data is not None else self._data
 
@@ -122,12 +164,25 @@ class CenDatResponse:
         _data=None,
     ) -> Union[List["pl.DataFrame"], "pl.DataFrame"]:
         """
-        Converts the response data into a list of Polars DataFrames.
+        Converts the response data into Polars DataFrames.
+
+        Each distinct API call result is converted into its own DataFrame.
+        Contextual columns (product, vintage, etc.) are added automatically.
 
         Args:
-            schema_overrides (dict, optional): A dictionary to override inferred schema types.
-                                                Passed directly to polars.DataFrame().
-                                                Example: {'POP': pl.Int64, 'GEO_ID': pl.Utf8}
+            schema_overrides (dict, optional): A dictionary to override inferred
+                Polars schema types. Passed directly to pl.DataFrame().
+                Example: {'POP': pl.Int64, 'GEO_ID': pl.Utf8}.
+            concat (bool): If True, concatenates all resulting DataFrames into a
+                single DataFrame. Defaults to False.
+            destring (bool): If True, attempts to convert string representations
+                of numbers into native numeric types. Defaults to False.
+            _data: For internal use by other methods. Do not set manually.
+
+        Returns:
+            Union[List[pl.DataFrame], pl.DataFrame]: A list of Polars DataFrames,
+            or a single concatenated DataFrame if `concat=True`. Returns an empty
+            list if Polars is not installed or no data is available.
         """
         try:
             import polars as pl
@@ -173,12 +228,25 @@ class CenDatResponse:
         _data=None,
     ) -> Union[List["pd.DataFrame"], "pd.DataFrame"]:
         """
-        Converts the response data into a list of Pandas DataFrames.
+        Converts the response data into Pandas DataFrames.
+
+        Each distinct API call result is converted into its own DataFrame.
+        Contextual columns (product, vintage, etc.) are added automatically.
 
         Args:
             dtypes (dict, optional): A dictionary of column names to data types,
-                                     passed to the pandas.DataFrame.astype() method.
-                                     Example: {'POP': 'int64', 'GEO_ID': 'str'}
+                passed to the pandas.DataFrame.astype() method.
+                Example: {'POP': 'int64', 'GEO_ID': 'str'}.
+            concat (bool): If True, concatenates all resulting DataFrames into a
+                single DataFrame. Defaults to False.
+            destring (bool): If True, attempts to convert string representations
+                of numbers into native numeric types. Defaults to False.
+            _data: For internal use by other methods. Do not set manually.
+
+        Returns:
+            Union[List[pd.DataFrame], pd.DataFrame]: A list of Pandas DataFrames,
+            or a single concatenated DataFrame if `concat=True`. Returns an empty
+            list if Pandas is not installed or no data is available.
         """
         try:
             import pandas as pd
@@ -215,12 +283,32 @@ class CenDatResponse:
     def tabulate(
         self,
         *variables: str,
+        weight: Optional[str] = None,
         where: Optional[Union[str, List[str]]] = None,
         logic: Callable = all,
         digits: int = 1,
-        fancy: bool = True,
-        format: str = "pipe",
     ):
+        """
+        Generates and prints a frequency table for specified variables.
+
+        This method creates a crosstabulation, similar to Stata's `tab` command,
+        calculating counts, percentages, and cumulative distributions. It can
+        dynamically use either the Polars or Pandas library for data manipulation,
+        whichever is available.
+
+        Args:
+            *variables (str): One or more column names to include in the tabulation.
+            weight (Optional[str]): The name of the column to use for weighting.
+                If None, each row has a weight of 1. Defaults to None.
+            where (Optional[Union[str, List[str]]]): A string or list of strings
+                representing conditions to filter the data before tabulation.
+                Each condition should be in a format like "variable operator value"
+                (e.g., "age > 30"). Defaults to None.
+            logic (Callable): The function to apply when multiple `where` conditions
+                are provided. Use `all` for AND logic (default) or `any` for OR logic.
+            digits (int): The number of decimal places to display for floating-point
+                numbers in the output table. Defaults to 1.
+        """
         try:
             import polars as pl
 
@@ -236,6 +324,10 @@ class CenDatResponse:
                     "whichever you prefer to proceed with tabulations"
                 )
                 return
+
+        if weight and weight not in self.all_columns:
+            print(f"❌ Weight variable {weight} not found in set variables.")
+            return
 
         if where:
             where_list = [where] if isinstance(where, str) else where
@@ -286,6 +378,10 @@ class CenDatResponse:
 
         table = None
         if df_lib == "pl":
+            if weight:
+                wgt_agg = pl.col(weight).sum()
+            else:
+                wgt_agg = pl.len()
             try:
                 # When data is pre-filtered, it's already dicts, so destring is effectively done
                 df = self.to_polars(
@@ -297,11 +393,11 @@ class CenDatResponse:
                     print("ℹ️ DataFrame is empty, cannot tabulate.")
                     return
                 table = (
-                    df.with_columns(pl.lit(df.height).alias("N"))
+                    df.with_columns(wgt_agg.alias("N"))
                     .group_by(*variables)
                     .agg(
-                        pl.len().alias("n"),
-                        ((pl.len() * 100) / pl.col("N").first()).alias("pct"),
+                        wgt_agg.alias("n"),
+                        ((wgt_agg * 100) / pl.col("N").first()).alias("pct"),
                     )
                     .sort(*variables)
                     .with_columns(
@@ -323,8 +419,22 @@ class CenDatResponse:
                 if df.empty:
                     print("ℹ️ DataFrame is empty, cannot tabulate.")
                     return
-                table = df.groupby(list(variables)).size().reset_index(name="n")
-                N = len(df)
+                if weight:
+                    # Perform weighted aggregation
+                    N = df[weight].sum()
+                    table = (
+                        df.groupby(list(variables), observed=True)[weight]
+                        .sum()
+                        .reset_index(name="n")
+                    )
+                else:
+                    # Perform unweighted count
+                    N = len(df)
+                    table = (
+                        df.groupby(list(variables), observed=True)
+                        .size()
+                        .reset_index(name="n")
+                    )
                 table["pct"] = (table["n"] * 100) / N
                 table = table.sort_values(by=list(variables))
                 table["cumn"] = table["n"].cumsum()
@@ -337,57 +447,52 @@ class CenDatResponse:
             return
 
         with (
-            pl.Config(float_precision=digits)
+            pl.Config(
+                float_precision=digits,
+                set_tbl_rows=-1,
+                set_tbl_cols=-1,
+                set_tbl_width_chars=-1,
+                set_thousands_separator=",",
+                set_tbl_hide_column_data_types=True,
+                set_tbl_cell_alignment="RIGHT",
+            )
             if df_lib == "pl"
-            else pd.option_context("display.precision", digits)
+            else pd.option_context(
+                "display.precision",
+                digits,
+                "display.max_rows",
+                None,
+                "display.max_columns",
+                None,
+                "styler.format.thousands",
+                ",",
+            )
         ):
-            if fancy:
-                try:
-                    from tabulate import tabulate
-
-                    print(
-                        tabulate(
-                            (
-                                table.to_dicts()
-                                if df_lib == "pl"
-                                else table.to_dict("records")
-                            ),
-                            headers="keys",
-                            tablefmt=format,
-                            floatfmt=f".{digits}f",
-                            showindex=False,
-                        )
-                    )
-                except ImportError:
-                    print(
-                        "NOTE: 'tabulate' package not installed. Run `pip install tabulate` for fancy tables."
-                    )
-                    print("Falling back to standard output.")
-                    print(table)
-            else:
-                print(table)
+            print(table)
 
     def __repr__(self) -> str:
+        """Provides a developer-friendly representation of the object."""
         return f"<CenDatResponse with {len(self._data)} result(s)>"
 
     def __getitem__(self, index: int) -> Dict:
-        """Allows accessing individual results by index."""
+        """Allows accessing individual raw result dictionaries by index."""
         return self._data[index]
 
 
 class CenDatHelper:
     """
-    A helper object for exploring and working with the US Census Bureau API.
+    A helper for exploring and retrieving data from the US Census Bureau API.
 
-    This class provides methods to list and select datasets, geographies, and
-    variables by interacting directly with the Census JSON API endpoints.
+    This class provides a chainable, stateful interface to list, select, and
+    combine datasets, geographies, and variables to build and execute API calls.
 
     Attributes:
-        years (list[int]): The primary year or years of interest for data queries.
-        products (list[dict]): A list of the currently selected data product details.
-        geos (list[dict]): A list of the currently selected geographies.
-        variables (list[dict]): A list of the currently selected variables.
-        params (list[dict]): A list of combined geography and variable parameters for API calls.
+        years (List[int]): The primary year or years of interest for data queries.
+        products (List[Dict]): The currently selected data product details.
+        geos (List[Dict]): The currently selected geographies.
+        variables (List[Dict]): The currently selected variables.
+        params (List[Dict]): The combined geo/variable parameters for API calls.
+        n_calls (int): The number of API calls that will be made by get_data().
     """
 
     def __init__(
@@ -397,10 +502,11 @@ class CenDatHelper:
         Initializes the CenDatHelper object.
 
         Args:
-            years (int | list[int], optional): The year or years of interest.
-                                              If provided, they are set upon
-                                              initialization. Defaults to None.
-            key (str, optional): An API key to load upon initialization.
+            years (Union[int, List[int]], optional): The year or years of
+                interest. If provided, they are set upon initialization.
+                Defaults to None.
+            key (str, optional): A Census Bureau API key to load upon
+                initialization. Defaults to None.
         """
         self.years: Optional[List[int]] = None
         self.products: List[Dict] = []
@@ -419,8 +525,20 @@ class CenDatHelper:
         if key is not None:
             self.load_key(key)
 
-    def __getitem__(self, key: str) -> List[Dict]:
-        """Allows accessing key attributes by name."""
+    def __getitem__(self, key: str) -> Union[List[Dict], Optional[int]]:
+        """
+        Allows dictionary-style access to key attributes.
+
+        Args:
+            key (str): The attribute to access. One of 'products', 'geos',
+                       'variables', 'params', or 'n_calls'.
+
+        Returns:
+            The value of the requested attribute.
+
+        Raises:
+            KeyError: If the key is not a valid attribute name.
+        """
         if key == "products":
             return self.products
         elif key == "geos":
@@ -437,7 +555,15 @@ class CenDatHelper:
             )
 
     def set_years(self, years: Union[int, List[int]]):
-        """Sets the object's years attribute."""
+        """
+        Sets the object's active years for filtering API metadata.
+
+        Args:
+            years (Union[int, List[int]]): The year or list of years to set.
+
+        Raises:
+            TypeError: If `years` is not an integer or a list of integers.
+        """
         if isinstance(years, int):
             self.years = [years]
         elif isinstance(years, list) and all(isinstance(y, int) for y in years):
@@ -447,7 +573,15 @@ class CenDatHelper:
         print(f"✅ Years set to: {self.years}")
 
     def load_key(self, key: Optional[str] = None):
-        """Loads a Census API key for authenticated requests."""
+        """
+        Loads a Census API key for authenticated requests.
+
+        Using a key is recommended to avoid stricter rate limits on anonymous
+        requests.
+
+        Args:
+            key (str, optional): The API key string. Defaults to None.
+        """
         if key:
             self.__key = key
             print("✅ API key loaded successfully.")
@@ -457,7 +591,18 @@ class CenDatHelper:
     def _get_json_from_url(
         self, url: str, params: Optional[Dict] = None, timeout: int = 30
     ) -> Optional[List[List[str]]]:
-        """Helper to fetch and parse JSON from a URL."""
+        """
+        Internal helper to fetch and parse JSON from a URL with error handling.
+
+        Args:
+            url (str): The URL to fetch.
+            params (Dict, optional): Dictionary of query parameters.
+            timeout (int): Request timeout in seconds.
+
+        Returns:
+            Optional[List[List[str]]]: The parsed JSON data (typically a list
+            of lists), or None if an error occurs.
+        """
         if not params:
             params = {}
         if self.__key:
@@ -491,7 +636,14 @@ class CenDatHelper:
 
     def _parse_vintage(self, vintage_input: Union[str, int]) -> List[int]:
         """
-        Robustly parses a vintage value.
+        Robustly parses a vintage value which can be a single year or a range.
+
+        Args:
+            vintage_input (Union[str, int]): The vintage string or integer
+                                             (e.g., 2020, "2010-2014").
+
+        Returns:
+            List[int]: A list of integer years.
         """
         if not vintage_input:
             return []
@@ -513,7 +665,26 @@ class CenDatHelper:
         match_in: str = "title",
     ) -> Union[List[str], List[Dict[str, str]]]:
         """
-        Lists available data products from the JSON endpoint.
+        Lists available data products, with options for filtering.
+
+        Fetches all available datasets from the main Census API endpoint and
+        filters them based on year and string patterns. Results are cached
+        for subsequent calls.
+
+        Args:
+            years (Union[int, List[int]], optional): Filter products available
+                for this year or list of years. Defaults to years set on the object.
+            patterns (Union[str, List[str]], optional): A regex pattern or list
+                of patterns to search for in the product metadata.
+            to_dicts (bool): If True (default), returns a list of dictionaries
+                with full product details. If False, returns a list of titles.
+            logic (Callable): The function to apply when multiple `patterns` are
+                provided. Use `all` (default) for AND logic or `any` for OR logic.
+            match_in (str): The metadata field to search within. Must be 'title'
+                (default) or 'desc'.
+
+        Returns:
+            A list of product dictionaries or a list of product titles.
         """
         if not self._products_cache:
             data = self._get_json_from_url("https://api.census.gov/data.json")
@@ -596,7 +767,12 @@ class CenDatHelper:
 
     def set_products(self, titles: Optional[Union[str, List[str]]] = None):
         """
-        Sets the active data products.
+        Sets the active data products for subsequent method calls.
+
+        Args:
+            titles (Union[str, List[str]], optional): The title or list of
+                titles of the products to set. If None, sets all products from
+                the last `list_products` call.
         """
         prods_to_set = []
         if titles is None:
@@ -633,7 +809,19 @@ class CenDatHelper:
         logic: Callable[[iter], bool] = all,
     ) -> Union[List[str], List[Dict[str, str]]]:
         """
-        Lists available geographies across all currently set products.
+        Lists available geographies for the currently set products.
+
+        Args:
+            to_dicts (bool): If True, returns a list of dictionaries with full
+                geography details. If False (default), returns a sorted list of
+                unique summary level names ('sumlev').
+            patterns (Union[str, List[str]], optional): A regex pattern or list
+                of patterns to search for in the geography description.
+            logic (Callable): The function to apply when multiple `patterns` are
+                provided. Use `all` (default) for AND logic or `any` for OR logic.
+
+        Returns:
+            A list of geography dictionaries or a list of summary level strings.
         """
         if not self.products:
             print("❌ Error: Products must be set first via `set_products()`.")
@@ -685,14 +873,13 @@ class CenDatHelper:
         by: str = "sumlev",
     ):
         """
-        Sets the active geographies, informing the user of any required parent geos.
+        Sets the active geographies for data retrieval.
 
         Args:
-            values (str or list, optional): The geography values to set.
-                                          Can be summary levels or descriptions.
-                                          If None, sets all geos from the last `list_geos` call.
-            by (str, optional): The key to use for matching values.
-                                Must be either 'sumlev' (default) or 'desc'.
+            values (Union[str, List[str]], optional): The geography values to set.
+                If None, sets all geos from the last `list_geos` call.
+            by (str): The key to use for matching `values`. Must be either
+                'sumlev' (default) or 'desc'.
         """
         if by not in ["sumlev", "desc"]:
             print("❌ Error: `by` must be either 'sumlev' or 'desc'.")
@@ -753,7 +940,21 @@ class CenDatHelper:
         match_in: str = "label",
     ) -> Union[List[str], List[Dict[str, str]]]:
         """
-        Lists available variables across all currently set products.
+        Lists available variables for the currently set products.
+
+        Args:
+            to_dicts (bool): If True (default), returns a list of dictionaries
+                with full variable details. If False, returns a sorted list of
+                unique variable names.
+            patterns (Union[str, List[str]], optional): A regex pattern or list
+                of patterns to search for in the variable metadata.
+            logic (Callable): The function to apply when multiple `patterns` are
+                provided. Use `all` (default) for AND logic or `any` for OR logic.
+            match_in (str): The metadata field to search within. Must be 'label'
+                (default), 'name', or 'concept'.
+
+        Returns:
+            A list of variable dictionaries or a list of variable name strings.
         """
         if not self.products:
             print("❌ Error: Products must be set first via `set_products()`.")
@@ -810,7 +1011,12 @@ class CenDatHelper:
 
     def set_variables(self, names: Optional[Union[str, List[str]]] = None):
         """
-        Sets the active variables, grouping them by product and vintage.
+        Sets the active variables for data retrieval.
+
+        Args:
+            names (Union[str, List[str]], optional): The name or list of names
+                of the variables to set. If None, sets all variables from the
+                last `list_variables` call.
         """
         vars_to_set = []
         if names is None:
@@ -854,7 +1060,11 @@ class CenDatHelper:
 
     def _create_params(self):
         """
-        Internal method to join the set geos and variables by product and vintage.
+        Internal method to combine set geos and variables into API parameters.
+
+        This method joins the user-selected geographies and variables based on
+        matching product and vintage, creating the final parameter sets that
+        will be used to construct API calls in `get_data`.
         """
         if not self.geos or not self.variables:
             print(
@@ -901,7 +1111,22 @@ class CenDatHelper:
         max_workers: Optional[int] = None,
     ) -> List[Dict]:
         """
-        Recursively fetches all valid combinations of parent geographies for aggregate data.
+        Recursively fetches all valid combinations of parent geographies.
+
+        For aggregate data, if a geography requires parent geos (e.g., a county
+        requires a state), this method fetches all possible parent FIPS codes
+        to build the necessary `in` clauses for the final data query.
+
+        Args:
+            base_url (str): The base API URL for the product.
+            required_geos (List[str]): A list of parent geo levels to fetch.
+            current_in_clause (Dict): The `in` clause built so far in the recursion.
+            timeout (int): Request timeout in seconds.
+            max_workers (int, optional): Max concurrent threads for fetching.
+
+        Returns:
+            List[Dict]: A list of dictionaries, where each dict is a valid
+                        `in` clause for a data request.
         """
         if not required_geos:
             return [current_in_clause]
@@ -950,7 +1175,27 @@ class CenDatHelper:
         preview_only: bool = False,
     ) -> "CenDatResponse":
         """
-        Retrieves data and returns a CenDatResponse object for further processing.
+        Retrieves data from the Census API based on the set parameters.
+
+        This is the final method in the chain. It constructs and executes all
+        necessary API calls in parallel, aggregates the results, and returns
+        a CenDatResponse object for further processing.
+
+        Args:
+            within (Union[str, Dict, List[Dict]]): Specifies the geographic
+                scope. Can be "us" (default), or a dictionary defining parent
+                geographies (e.g., `{'state': '06'}` for California), or a list
+                of such dictionaries for multiple scopes.
+            max_workers (int, optional): The maximum number of concurrent
+                threads to use for API calls. Defaults to 100.
+            timeout (int): Request timeout in seconds for each API call.
+                Defaults to 30.
+            preview_only (bool): If True, builds the list of API calls but does
+                not execute them. Useful for debugging. Defaults to False.
+
+        Returns:
+            CenDatResponse: An object containing the aggregated data from all
+                            successful API calls.
         """
         self._create_params()
 
