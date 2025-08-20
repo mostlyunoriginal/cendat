@@ -27,15 +27,25 @@ class CenDatResponse:
         }
         self.ALLOWED_OPERATORS = set(self.OPERATOR_MAP.keys())
 
-    def build_safe_checker(self, condition_string: str):
+    def _build_safe_checker(self, condition_string: str):
         """
         Parses a condition string, validates it, and returns a function
         that performs the check on a dictionary row.
         """
 
+        # FIX: Build the list of valid columns from the 'schema' which contains ALL returned columns,
+        # not just 'names' which only contains requested variables.
+        all_columns = set(col for item in self._data for col in item.get("schema", []))
+        if not all_columns:
+            # Fallback or handle case with no data/names
+            all_columns_pattern = ""
+        else:
+            # FIX: Add re.escape() to handle column names with special regex characters.
+            all_columns_pattern = "|".join(re.escape(col) for col in all_columns)
+
         patternL = re.compile(
             r"^\s*("
-            + "|".join(col for col in self.ALLOWED_COLUMNS)
+            + all_columns_pattern
             + r")\s*("
             + "|".join(re.escape(op) for op in self.ALLOWED_OPERATORS)
             + r")\s*(.+)\s*$"
@@ -44,7 +54,7 @@ class CenDatResponse:
             r"^\s*(.+)\s*("
             + "|".join(re.escape(op) for op in self.ALLOWED_OPERATORS)
             + r")\s*("
-            + "|".join(col for col in self.ALLOWED_COLUMNS)
+            + all_columns_pattern
             + r")\s*$"
         )
         matchL = patternL.match(condition_string)
@@ -58,7 +68,7 @@ class CenDatResponse:
         else:
             value_string, op_string, variable = matchR.groups()
 
-        if variable not in self.ALLOWED_COLUMNS:
+        if variable not in all_columns:
             raise ValueError(f"Invalid column name: '{variable}'")
 
         op_func = self.OPERATOR_MAP[op_string]
@@ -72,9 +82,45 @@ class CenDatResponse:
             op_func(row[variable], value) if matchL else op_func(value, row[variable])
         )
 
+    def _prepare_dataframe_data(self, destring: bool, _data: Optional[List[Dict]]):
+        """
+        Internal generator to handle common data preparation for DataFrame conversion.
+        It yields the source item, the processed data, and the appropriate orientation.
+        """
+        data_source = _data if _data is not None else self._data
+
+        for item in data_source:
+            if not item.get("data"):
+                continue  # Skip if no data was returned for this parameter set
+
+            if not destring:
+                yield item, item["data"], "row"
+            else:
+                # Create a list of dictionaries and evaluate string values to native types
+                processed_data = []
+                for row in item["data"]:
+                    row_dict = {}
+                    # Use schema to ensure all columns are included in the dict
+                    for k, v in zip(item.get("schema", []), row):
+                        # Check if the column is a variable that should be destringed
+                        if k in item.get("names", []) and isinstance(v, str):
+                            try:
+                                row_dict[k] = ast.literal_eval(v)
+                            except (ValueError, SyntaxError):
+                                row_dict[k] = v  # Keep as string if eval fails
+                        else:
+                            row_dict[k] = v
+                    processed_data.append(row_dict)
+                yield item, processed_data, "dicts"
+
     def to_polars(
-        self, schema_overrides: Optional[Dict] = None, concat: bool = False
-    ) -> List["pl.DataFrame"]:
+        self,
+        schema_overrides: Optional[Dict] = None,
+        concat: bool = False,
+        destring: bool = False,
+        *,
+        _data=None,
+    ) -> Union[List["pl.DataFrame"], "pl.DataFrame"]:
         """
         Converts the response data into a list of Polars DataFrames.
 
@@ -92,14 +138,13 @@ class CenDatResponse:
             return []
 
         dataframes = []
-        for item in self._data:
-            if not item.get("data"):
-                continue  # Skip if no data was returned for this parameter set
-
+        for item, processed_data, orient in self._prepare_dataframe_data(
+            destring, _data
+        ):
             df = pl.DataFrame(
-                item["data"],
+                processed_data,
                 schema=item["schema"],
-                orient="row",
+                orient=orient,
                 schema_overrides=schema_overrides,
             )
 
@@ -113,11 +158,20 @@ class CenDatResponse:
                 ]
             )
             dataframes.append(df)
+
+        if not dataframes:
+            return []
+
         return pl.concat(dataframes, how="diagonal") if concat else dataframes
 
     def to_pandas(
-        self, dtypes: Optional[Dict] = None, concat: bool = False
-    ) -> List["pd.DataFrame"]:
+        self,
+        dtypes: Optional[Dict] = None,
+        concat: bool = False,
+        destring: bool = False,
+        *,
+        _data=None,
+    ) -> Union[List["pd.DataFrame"], "pd.DataFrame"]:
         """
         Converts the response data into a list of Pandas DataFrames.
 
@@ -135,11 +189,13 @@ class CenDatResponse:
             return []
 
         dataframes = []
-        for item in self._data:
-            if not item.get("data"):
-                continue  # Skip if no data was returned for this parameter set
-
-            df = pd.DataFrame(item["data"], columns=item["schema"])
+        for item, processed_data, orient in self._prepare_dataframe_data(
+            destring, _data
+        ):
+            # Pandas DataFrame constructor can handle both orientations
+            df = pd.DataFrame(
+                processed_data, columns=item["schema"] if orient == "row" else None
+            )
 
             if dtypes:
                 df = df.astype(dtypes, errors="ignore")
@@ -150,7 +206,166 @@ class CenDatResponse:
             df["sumlev"] = item["sumlev"]
             df["desc"] = item["desc"]
             dataframes.append(df)
+
+        if not dataframes:
+            return []
+
         return pd.concat(dataframes, ignore_index=True) if concat else dataframes
+
+    def tabulate(
+        self,
+        *variables: str,
+        where: Optional[Union[str, List[str]]] = None,
+        logic: Callable = all,
+        digits: int = 1,
+        fancy: bool = True,
+        format: str = "pipe",
+    ):
+        try:
+            import polars as pl
+
+            df_lib = "pl"
+        except ImportError:
+            try:
+                import pandas as pd
+
+                df_lib = "pd"
+            except ImportError:
+                print(
+                    "❌ Neither Polars nor Pandas are installed. Please install "
+                    "whichever you prefer to proceed with tabulations"
+                )
+                return
+
+        if where:
+            where_list = [where] if isinstance(where, str) else where
+            try:
+                checker_functions = [self._build_safe_checker(w) for w in where_list]
+
+                dat_filtered = []
+                for item in self._data:
+                    if not item.get("data"):
+                        continue
+
+                    # Convert rows to dicts for filtering
+                    dict_rows = [
+                        dict(zip(item["schema"], row)) for row in item.get("data", [])
+                    ]
+
+                    # Destring values before checking
+                    all_variable_names = set(item.get("names", []))
+                    for row in dict_rows:
+                        for key, val in row.items():
+                            if key in all_variable_names and isinstance(val, str):
+                                try:
+                                    row[key] = ast.literal_eval(val)
+                                except (ValueError, SyntaxError):
+                                    pass  # Keep as string if it fails
+
+                    filtered_rows = [
+                        row
+                        for row in dict_rows
+                        if logic(checker(row) for checker in checker_functions)
+                    ]
+
+                    if filtered_rows:
+                        # Reconstruct item with filtered data (as dicts)
+                        new_item = item.copy()
+                        new_item["data"] = filtered_rows
+                        dat_filtered.append(new_item)
+
+            except ValueError as e:
+                print(f"Error processing conditions: {e}")
+                return
+        else:
+            dat_filtered = self._data
+
+        if not dat_filtered:
+            print("ℹ️ No data to tabulate after filtering.")
+            return
+
+        table = None
+        if df_lib == "pl":
+            try:
+                # When data is pre-filtered, it's already dicts, so destring is effectively done
+                df = self.to_polars(
+                    concat=True,
+                    destring=True if not where else False,
+                    _data=dat_filtered,
+                )
+                if df.height == 0:
+                    print("ℹ️ DataFrame is empty, cannot tabulate.")
+                    return
+                table = (
+                    df.with_columns(pl.lit(df.height).alias("N"))
+                    .group_by(*variables)
+                    .agg(
+                        pl.len().alias("n"),
+                        ((pl.len() * 100) / pl.col("N").first()).alias("pct"),
+                    )
+                    .sort(*variables)
+                    .with_columns(
+                        pl.col("n").cum_sum().alias("cumn"),
+                        pl.col("pct").cum_sum().alias("cumpct"),
+                    )
+                )
+            except Exception as e:
+                print(f"❌ Polars conversion failed: {e}")
+                return
+
+        else:  # df_lib == "pd"
+            try:
+                df = self.to_pandas(
+                    concat=True,
+                    destring=True if not where else False,
+                    _data=dat_filtered,
+                )
+                if df.empty:
+                    print("ℹ️ DataFrame is empty, cannot tabulate.")
+                    return
+                table = df.groupby(list(variables)).size().reset_index(name="n")
+                N = len(df)
+                table["pct"] = (table["n"] * 100) / N
+                table = table.sort_values(by=list(variables))
+                table["cumn"] = table["n"].cumsum()
+                table["cumpct"] = table["pct"].cumsum()
+            except Exception as e:
+                print(f"❌ Pandas conversion failed: {e}")
+                return
+
+        if table is None:
+            return
+
+        with (
+            pl.Config(float_precision=digits)
+            if df_lib == "pl"
+            else pd.option_context("display.precision", digits)
+        ):
+            if fancy:
+                try:
+                    from tabulate import tabulate
+
+                    print(
+                        tabulate(
+                            (
+                                table.to_dicts()
+                                if df_lib == "pl"
+                                else table.to_dict("records")
+                            ),
+                            headers="keys",
+                            tablefmt=format,
+                            floatfmt=f".{digits}f",
+                            showindex=False,
+                        )
+                    )
+                except ImportError:
+                    print(
+                        "NOTE: 'tabulate' package not installed. Run `pip install tabulate` for fancy tables."
+                    )
+                    print("Falling back to standard output.")
+                    print(table)
+            else:
+                print(table)
 
     def __repr__(self) -> str:
         return f"<CenDatResponse with {len(self._data)} result(s)>"
@@ -183,8 +398,8 @@ class CenDatHelper:
 
         Args:
             years (int | list[int], optional): The year or years of interest.
-                                                 If provided, they are set upon
-                                                 initialization. Defaults to None.
+                                              If provided, they are set upon
+                                              initialization. Defaults to None.
             key (str, optional): An API key to load upon initialization.
         """
         self.years: Optional[List[int]] = None
@@ -474,8 +689,8 @@ class CenDatHelper:
 
         Args:
             values (str or list, optional): The geography values to set.
-                                            Can be summary levels or descriptions.
-                                            If None, sets all geos from the last `list_geos` call.
+                                          Can be summary levels or descriptions.
+                                          If None, sets all geos from the last `list_geos` call.
             by (str, optional): The key to use for matching values.
                                 Must be either 'sumlev' (default) or 'desc'.
         """
