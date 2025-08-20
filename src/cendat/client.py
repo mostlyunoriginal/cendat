@@ -325,9 +325,17 @@ class CenDatResponse:
                 )
                 return
 
-        if weight and weight not in self.all_columns:
-            print(f"❌ Weight variable {weight} not found in set variables.")
-            return
+        if weight:
+            wgt_pattern = re.compile(r"(\w+)\s*(\/)\s*(\d+\.\d+|\d+)")
+            wgt_match = wgt_pattern.match(weight)
+            if wgt_match:
+                wgt_var = wgt_match.groups()[0]
+                wgt_divisor = ast.literal_eval(wgt_match.groups()[2])
+            else:
+                wgt_var = weight
+            if wgt_var not in self.all_columns:
+                print(f"❌ Weight variable {wgt_var} not found in set variables.")
+                return
 
         if where:
             where_list = [where] if isinstance(where, str) else where
@@ -378,8 +386,10 @@ class CenDatResponse:
 
         table = None
         if df_lib == "pl":
-            if weight:
-                wgt_agg = pl.col(weight).sum()
+            if weight and wgt_match:
+                wgt_agg = (pl.col(wgt_var) / wgt_divisor).sum()
+            elif weight:
+                wgt_agg = pl.col(wgt_var).sum()
             else:
                 wgt_agg = pl.len()
             try:
