@@ -4,7 +4,6 @@ import pytest
 import re
 from unittest.mock import patch, Mock
 
-# Assuming the client module is in a src directory or the path is configured
 from cendat.client import CenDatHelper, CenDatResponse
 
 # --- 1. Mock Data ---
