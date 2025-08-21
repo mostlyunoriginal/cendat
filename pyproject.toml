@@ -30,5 +30,4 @@ dependencies = [
 [project.optional-dependencies]
 pandas = ["pandas"]
 polars = ["polars"]
-tabulate = ["tabulate"]
-all = ["pandas", "polars", "tabulate"]
+all = ["pandas", "polars"]
