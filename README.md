@@ -200,7 +200,7 @@ response.tabulate(
     where="AGEP > 17" # Filter for adults
 )
 
-# 3. Convert to DataFrame for further analysis
+# 4. Convert to DataFrame for further analysis
 # The `destring=True` argument allows Polars to infer the schema
 # for requested variables. It can also be controlled precisely via
 # `schema_overrides`.
