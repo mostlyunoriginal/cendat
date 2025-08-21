@@ -283,7 +283,9 @@ class CenDatResponse:
     def tabulate(
         self,
         *variables: str,
-        weight: Optional[str] = None,
+        strat_by: Optional[str] = None,
+        weight_var: Optional[str] = None,
+        weight_div: Optional[int] = None,
         where: Optional[Union[str, List[str]]] = None,
         logic: Callable = all,
         digits: int = 1,
@@ -298,8 +300,14 @@ class CenDatResponse:
 
         Args:
             *variables (str): One or more column names to include in the tabulation.
-            weight (Optional[str]): The name of the column to use for weighting.
+            strat_by (Optional[str]): A column name to stratify the results by.
+                Percentages and cumulative stats will be calculated within each
+                stratum. Defaults to None.
+            weight_var (Optional[str]): The name of the column to use for weighting.
                 If None, each row has a weight of 1. Defaults to None.
+            weight_div (Optional[int]): A positive integer to divide the weight by,
+                useful for pooled tabulations across multiple product vintages.
+                `weight_var` must be provided if this is used. Defaults to None.
             where (Optional[Union[str, List[str]]]): A string or list of strings
                 representing conditions to filter the data before tabulation.
                 Each condition should be in a format like "variable operator value"
@@ -325,17 +333,31 @@ class CenDatResponse:
                 )
                 return
 
-        if weight:
-            wgt_pattern = re.compile(r"(\w+)\s*(\/)\s*(\d+\.\d+|\d+)")
-            wgt_match = wgt_pattern.match(weight)
-            if wgt_match:
-                wgt_var = wgt_match.groups()[0]
-                wgt_divisor = ast.literal_eval(wgt_match.groups()[2])
-            else:
-                wgt_var = weight
-            if wgt_var not in self.all_columns:
-                print(f"❌ Weight variable {wgt_var} not found in set variables.")
+        bad_vars = [
+            variable for variable in variables if variable not in self.all_columns
+        ]
+        if len(bad_vars) > 0:
+            print(
+                f"❌ Cross-tabulation variables {bad_vars} not found in available variables."
+            )
+            return
+
+        if strat_by and strat_by not in self.all_columns:
+            print(
+                f"❌ Stratification variable '{strat_by}' not found in available variables."
+            )
+            return
+
+        if weight_var and weight_var not in self.all_columns:
+            print(f"❌ Weight variable '{weight_var}' not found in set variables.")
+            return
+
+        if weight_div is not None:
+            if not isinstance(weight_div, int) or weight_div <= 0:
+                print("❌ Error: `weight_div` must be a positive integer.")
                 return
+            if not weight_var:
+                print("ℹ️ `weight_div` is only valid if `weight_var` is provided.")
 
         if where:
             where_list = [where] if isinstance(where, str) else where
@@ -386,37 +408,66 @@ class CenDatResponse:
 
         table = None
         if df_lib == "pl":
-            if weight and wgt_match:
-                wgt_agg = (pl.col(wgt_var) / wgt_divisor).sum()
-            elif weight:
-                wgt_agg = pl.col(wgt_var).sum()
-            else:
-                wgt_agg = pl.len()
             try:
-                # When data is pre-filtered, it's already dicts, so destring is effectively done
+                if weight_var and weight_div:
+                    wgt_agg = (pl.col(weight_var) / weight_div).sum()
+                elif weight_var:
+                    wgt_agg = pl.col(weight_var).sum()
+                else:
+                    wgt_agg = pl.len()
+
                 df = self.to_polars(
                     concat=True,
                     destring=True if not where else False,
                     _data=dat_filtered,
                 )
+
                 if df.height == 0:
                     print("ℹ️ DataFrame is empty, cannot tabulate.")
                     return
+
                 table = (
-                    df.with_columns(wgt_agg.alias("N"))
-                    .group_by(*variables)
-                    .agg(
-                        wgt_agg.alias("n"),
-                        ((wgt_agg * 100) / pl.col("N").first()).alias("pct"),
+                    (
+                        df.with_columns(wgt_agg.over(strat_by).alias("N"))
+                        .group_by(strat_by, *variables)
+                        .agg(
+                            wgt_agg.alias("n"),
+                            ((wgt_agg * 100) / pl.col("N").first()).alias("pct"),
+                        )
+                        .sort(strat_by, *variables)
+                        .with_columns(
+                            pl.col("n").cum_sum().over(strat_by).alias("cumn"),
+                            pl.col("pct").cum_sum().over(strat_by).alias("cumpct"),
+                        )
                     )
-                    .sort(*variables)
-                    .with_columns(
-                        pl.col("n").cum_sum().alias("cumn"),
-                        pl.col("pct").cum_sum().alias("cumpct"),
+                    if strat_by
+                    else (
+                        df.with_columns(wgt_agg.alias("N"))
+                        .group_by(*variables)
+                        .agg(
+                            wgt_agg.alias("n"),
+                            ((wgt_agg * 100) / pl.col("N").first()).alias("pct"),
+                        )
+                        .sort(*variables)
+                        .with_columns(
+                            pl.col("n").cum_sum().alias("cumn"),
+                            pl.col("pct").cum_sum().alias("cumpct"),
+                        )
                     )
                 )
+
+            except pl.exceptions.ColumnNotFoundError:
+                print(
+                    f"❌ Error: The weight column '{weight_var}' was not found in the DataFrame."
+                )
+                return
+            except TypeError:
+                print(
+                    f"❌ Error: The weight column '{weight_var}' contains non-numeric values."
+                )
+                return
             except Exception as e:
-                print(f"❌ Polars conversion failed: {e}")
+                print(f"❌ Polars tabulation failed: {e}")
                 return
 
         else:  # df_lib == "pd"
@@ -429,28 +480,82 @@ class CenDatResponse:
                 if df.empty:
                     print("ℹ️ DataFrame is empty, cannot tabulate.")
                     return
-                if weight:
-                    # Perform weighted aggregation
-                    N = df[weight].sum()
+
+                group_cols = list(variables)
+                if strat_by:
+                    group_cols.insert(0, strat_by)
+
+                # Determine the weight column and calculate n
+                if weight_var:
+                    wgt_col = weight_var
+                    if weight_div:
+                        wgt_col = "_temp_wgt"
+                        df[wgt_col] = df[weight_var] / weight_div
                     table = (
-                        df.groupby(list(variables), observed=True)[weight]
+                        df.groupby(group_cols, observed=True)[wgt_col]
                         .sum()
                         .reset_index(name="n")
                     )
                 else:
-                    # Perform unweighted count
-                    N = len(df)
                     table = (
-                        df.groupby(list(variables), observed=True)
+                        df.groupby(group_cols, observed=True)
                         .size()
                         .reset_index(name="n")
                     )
-                table["pct"] = (table["n"] * 100) / N
-                table = table.sort_values(by=list(variables))
-                table["cumn"] = table["n"].cumsum()
-                table["cumpct"] = table["pct"].cumsum()
+
+                # Calculate N (total per stratum or overall) and percentages
+                if strat_by:
+                    if weight_var:
+                        wgt_col_for_n = wgt_col  # Use temp col if it exists
+                        stratum_totals = (
+                            df.groupby(strat_by, observed=True)[wgt_col_for_n]
+                            .sum()
+                            .reset_index(name="N")
+                        )
+                    else:
+                        stratum_totals = (
+                            df.groupby(strat_by, observed=True)
+                            .size()
+                            .reset_index(name="N")
+                        )
+                    table = pd.merge(table, stratum_totals, on=strat_by)
+                else:
+                    if weight_var:
+                        wgt_col_for_n = wgt_col  # Use temp col if it exists
+                        table["N"] = df[wgt_col_for_n].sum()
+                    else:
+                        table["N"] = len(df)
+
+                table["pct"] = (table["n"] * 100) / table["N"]
+                table = table.sort_values(by=group_cols)
+
+                # Calculate cumulative sums (within strata or overall)
+                if strat_by:
+                    table["cumn"] = table.groupby(strat_by, observed=True)["n"].cumsum()
+                    table["cumpct"] = table.groupby(strat_by, observed=True)[
+                        "pct"
+                    ].cumsum()
+                else:
+                    table["cumn"] = table["n"].cumsum()
+                    table["cumpct"] = table["pct"].cumsum()
+
+                # Cleanup
+                table.drop(columns=["N"], inplace=True)
+                if weight_var and weight_div:
+                    df.drop(columns=["_temp_wgt"], inplace=True)
+
+            except KeyError:
+                print(
+                    f"❌ Error: A specified column (e.g., '{weight_var}' or '{strat_by}') was not found."
+                )
+                return
+            except TypeError:
+                print(
+                    f"❌ Error: The weight column '{weight_var}' contains non-numeric values."
+                )
+                return
             except Exception as e:
-                print(f"❌ Pandas conversion failed: {e}")
+                print(f"❌ Pandas tabulation failed: {e}")
                 return
 
         if table is None:

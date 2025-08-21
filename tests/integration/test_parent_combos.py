@@ -98,7 +98,7 @@ def test_n_calls_block_groups():
     )
 
     c.set_geos("150")
-    c.get_data(preview_only=True, timeout=60, max_workers=50)
+    c.get_data(preview_only=True, timeout=60, max_workers=25)
 
     assert c["n_calls"] == check_calls
 
