@@ -573,11 +573,13 @@ class CenDatResponse:
             )
             if df_lib == "pl"
             else pd.option_context(
-                "display.precision",
-                digits,
+                "display.float_format",
+                lambda x: f"{x:,.{digits}f}",
                 "display.max_rows",
                 None,
                 "display.max_columns",
+                None,
+                "display.max_colwidth",
                 None,
                 "styler.format.thousands",
                 ",",
