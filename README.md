@@ -186,10 +186,7 @@ cdh.set_variables(names=["SEX", "AGEP", "ST", "PWGTP"])
 
 # 2. Get data for two states
 response = cdh.get_data(
-    within=[
-        {"state": "06"}, # California
-        {"state": "48"}, # Texas
-    ]
+    within={"state": ["06", "48"]}, # California and Texas
 )
 
 # 3. Create a stratified tabulation
