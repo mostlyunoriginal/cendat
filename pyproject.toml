@@ -6,13 +6,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cendat"
-version = "0.4.0"
+version = "0.4.2"
 authors = [
   { name="G. Lance Couzens", email="lance.couzens@gmail.com" },
 ]
 description = "A helper library for exploring and fetching data from the U.S. Census Bureau API."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -23,8 +23,8 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/your_username/cendat"
-"Bug Tracker" = "https://github.com/your_username/cendat/issues"
+"Homepage" = "https://github.com/mostlyunoriginal/cendat"
+"Bug Tracker" = "https://github.com/mostlyunoriginal/cendat/issues"
 
 # This section defines the optional dependencies
 [project.optional-dependencies]
