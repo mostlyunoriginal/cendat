@@ -429,3 +429,57 @@ def test_tabulate_with_multiple_where_clauses_and_any_logic(
     assert find_row_in_output(r"FL\s+┆\s+Asian\s+┆\s+1", captured)
     # The Black person in CA (age 35) should be excluded
     assert not find_row_in_output(r"CA\s+┆\s+Black", captured)
+
+
+@pytest.mark.unit
+@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.client.requests.get")
+def test_get_data_with_specific_target_geos(mock_get, mock_get_combos, cdh):
+    """
+    Tests that get_data bypasses the parent combination search when the
+    target geography is specified directly in the `within` clause.
+    """
+    # --- Arrange ---
+    mock_product_response = Mock()
+    mock_product_response.json.return_value = {
+        "dataset": [
+            {
+                "title": "American Community Survey",
+                "c_isAggregate": "true",
+                "c_vintage": 2022,
+                "distribution": [
+                    {"accessURL": "http://api.census.gov/data/2022/acs/acs5"}
+                ],
+            }
+        ]
+    }
+    mock_geo_response = Mock()
+    mock_geo_response.json.return_value = FAKE_GEOS_JSON
+    mock_variable_response = Mock()
+    mock_variable_response.json.return_value = SIMPLE_VARIABLES_JSON
+
+    mock_data_response = Mock()
+    mock_data_response.json.return_value = [
+        ["B01001_001E", "state", "county", "tract"],
+        ["1234", "08", "069", "001201"],
+    ]
+
+    mock_get.side_effect = [
+        mock_product_response,
+        mock_geo_response,
+        mock_variable_response,
+        mock_data_response,
+    ]
+
+    # --- Act ---
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_geos(values="tract", by="desc")
+    cdh.set_variables(names="B01001_001E")
+    cdh.get_data(within={"state": "08", "county": "069", "tract": "001201"})
+
+    # --- Assert ---
+    mock_get_combos.assert_not_called()
+
+    final_call_args = mock_get.call_args
+    assert final_call_args.kwargs["params"]["for"] == "tract:001201"
+    assert final_call_args.kwargs["params"]["in"] == "state:08 county:069"

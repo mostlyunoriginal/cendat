@@ -334,21 +334,28 @@ class CenDatResponse:
                 return
 
         bad_vars = [
-            variable for variable in variables if variable not in self.all_columns
+            variable
+            for variable in variables
+            if variable
+            not in self.all_columns.union({"product", "vintage", "sumlev", "desc"})
         ]
-        if len(bad_vars) > 0:
+        if bad_vars:
             print(
                 f"❌ Cross-tabulation variables {bad_vars} not found in available variables."
             )
             return
 
-        if strat_by and strat_by not in self.all_columns:
+        if strat_by and strat_by not in self.all_columns.union(
+            {"product", "vintage", "sumlev", "desc"}
+        ):
             print(
                 f"❌ Stratification variable '{strat_by}' not found in available variables."
             )
             return
 
-        if weight_var and weight_var not in self.all_columns:
+        if weight_var and weight_var not in self.all_columns.union(
+            {"product", "vintage", "sumlev", "desc"}
+        ):
             print(f"❌ Weight variable '{weight_var}' not found in set variables.")
             return
 
@@ -1329,7 +1336,6 @@ class CenDatHelper:
 
         raw_within_clauses = within if isinstance(within, list) else [within]
 
-        # --- FIX START: Correctly expand within clauses containing lists into multiple queries ---
         expanded_within_clauses = []
         for clause in raw_within_clauses:
             if not isinstance(clause, dict):
@@ -1350,7 +1356,6 @@ class CenDatHelper:
                 new_clause = single_items.copy()
                 new_clause.update(dict(zip(keys, v_combination)))
                 expanded_within_clauses.append(new_clause)
-        # --- FIX END ---
 
         for i, param in enumerate(self.params):
             product_info = next(
@@ -1400,19 +1405,45 @@ class CenDatHelper:
                 elif product_info.get("is_aggregate"):
                     required_geos = param.get("requires") or []
 
-                    provided_geos = {}
+                    provided_parent_geos = {}
                     if isinstance(within_clause, dict):
-                        provided_geos = {
-                            k: v for k, v in within_clause.items() if k in required_geos
-                        }
+                        within_copy = within_clause.copy()
+                        target_geo_codes = within_copy.pop(target_geo, None)
 
-                    geos_to_fetch = [g for g in required_geos if g not in provided_geos]
+                        if target_geo_codes:
+                            codes_str = (
+                                target_geo_codes
+                                if isinstance(target_geo_codes, str)
+                                else ",".join(target_geo_codes)
+                            )
+
+                            api_params = {
+                                "get": variable_names,
+                                "for": f"{target_geo}:{codes_str}",
+                            }
+                            if within_copy:
+                                api_params["in"] = " ".join(
+                                    [f"{k}:{v}" for k, v in within_copy.items()]
+                                )
+                            all_tasks.append((vintage_url, api_params, context))
+                            continue
+
+                        else:
+                            provided_parent_geos = {
+                                k: v
+                                for k, v in within_clause.items()
+                                if k in required_geos
+                            }
+
+                    geos_to_fetch = [
+                        g for g in required_geos if g not in provided_parent_geos
+                    ]
 
                     print(f"ℹ️ Fetching parent geographies for '{param['desc']}'...")
                     combinations = self._get_parent_geo_combinations(
                         vintage_url,
                         geos_to_fetch,
-                        provided_geos,
+                        provided_parent_geos,
                         timeout=timeout,
                         max_workers=max_workers,
                     )
