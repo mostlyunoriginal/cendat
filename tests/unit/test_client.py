@@ -40,12 +40,33 @@ FAKE_GEOS_JSON = {
     "fips": [
         {"name": "us", "geoLevelDisplay": "010", "requires": None},
         {"name": "state", "geoLevelDisplay": "040", "requires": None},
-        {"name": "county", "geoLevelDisplay": "050", "requires": ["state"]},
-        {"name": "tract", "geoLevelDisplay": "140", "requires": ["state", "county"]},
+        {
+            "name": "county",
+            "geoLevelDisplay": "050",
+            "requires": ["state"],
+            "wildcard": ["state"],
+            "optionalWithWCFor": "state",
+        },
+        {
+            "name": "tract",
+            "geoLevelDisplay": "140",
+            "requires": ["state", "county"],
+            "wildcard": ["county"],
+            "optionalWithWCFor": "county",
+        },
+        {
+            "name": "block group",
+            "geoLevelDisplay": "150",
+            "referenceDate": "2020-01-01",
+            "requires": ["state", "county", "tract"],
+            "wildcard": ["county", "tract"],
+            "optionalWithWCFor": "tract",
+        },
         {
             "name": "public use microdata area",
             "geoLevelDisplay": "795",
             "requires": ["state"],
+            "optionalWithWCFor": "state",
         },
     ]
 }
@@ -511,6 +532,46 @@ def test_get_data_uses_wildcard_correctly(mock_get_json, mock_get_combos, cdh):
     final_data_call = mock_get_json.call_args_list[-1]
     params = final_data_call.args[1]
     assert params["for"] == "tract:*"
+    assert params["in"] == "state:08"
+
+
+@pytest.mark.unit
+@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.client.CenDatHelper._get_json_from_url")
+def test_get_data_uses_wildcard_correctly2(mock_get_json, mock_get_combos, cdh):
+    """
+    Tests that get_data correctly uses a wildcard for the most granular,
+    unspecified required geography.
+    """
+    # --- Arrange ---
+    mock_get_json.side_effect = [
+        SIMPLE_PRODUCTS_JSON,
+        FAKE_GEOS_JSON,
+        SIMPLE_VARIABLES_JSON,
+        # This is the final data call, which we will inspect
+        [
+            ["B01001_001E", "state", "county", "tract", "block group"],
+            ["1234", "08", "069", "001201", "1"],
+        ],
+    ]
+
+    # --- Act ---
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_geos(values="block group", by="desc")  # Requires state and county
+    cdh.set_variables(names="B01001_001E")
+    cdh.get_data(within={"state": "08"})  # Only state is provided
+
+    # --- Assert ---
+    # 1. Check that discovery was NOT called, since the logic can proceed directly
+    # to building the wildcard query with the provided state.
+    mock_get_combos.assert_not_called()
+
+    # 2. Check that the final data-fetching call uses the wildcard for county.
+    assert mock_get_json.call_count == 3 + 1  # 3 setup calls, 1 data call
+
+    final_data_call = mock_get_json.call_args_list[-1]
+    params = final_data_call.args[1]
+    assert params["for"] == "block group:*"
     assert params["in"] == "state:08 county:*"
 
 
@@ -551,9 +612,9 @@ def test_get_data_wildcard_with_us_scope(mock_get_json, mock_get_combos, cdh):
     call2_params = mock_get_json.call_args_list[-1].args[1]
 
     assert call1_params["for"] == "tract:*"
-    assert call1_params["in"] == "state:01 county:*"
+    assert call1_params["in"] == "state:01"
     assert call2_params["for"] == "tract:*"
-    assert call2_params["in"] == "state:02 county:*"
+    assert call2_params["in"] == "state:02"
 
 
 @pytest.mark.unit
@@ -617,4 +678,4 @@ def test_get_data_single_requirement_uses_wildcard(mock_get_json, mock_get_combo
     assert mock_get_json.call_count == 3 + 1
     final_call_params = mock_get_json.call_args.args[1]
     assert final_call_params["for"] == "county:*"
-    assert final_call_params["in"] == "state:*"
+    assert "in" not in final_call_params
