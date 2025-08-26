@@ -40,12 +40,33 @@ FAKE_GEOS_JSON = {
     "fips": [
         {"name": "us", "geoLevelDisplay": "010", "requires": None},
         {"name": "state", "geoLevelDisplay": "040", "requires": None},
-        {"name": "county", "geoLevelDisplay": "050", "requires": ["state"]},
-        {"name": "tract", "geoLevelDisplay": "140", "requires": ["state", "county"]},
+        {
+            "name": "county",
+            "geoLevelDisplay": "050",
+            "requires": ["state"],
+            "wildcard": ["state"],
+            "optionalWithWCFor": "state",
+        },
+        {
+            "name": "tract",
+            "geoLevelDisplay": "140",
+            "requires": ["state", "county"],
+            "wildcard": ["county"],
+            "optionalWithWCFor": "county",
+        },
+        {
+            "name": "block group",
+            "geoLevelDisplay": "150",
+            "referenceDate": "2020-01-01",
+            "requires": ["state", "county", "tract"],
+            "wildcard": ["county", "tract"],
+            "optionalWithWCFor": "tract",
+        },
         {
             "name": "public use microdata area",
             "geoLevelDisplay": "795",
             "requires": ["state"],
+            "optionalWithWCFor": "state",
         },
     ]
 }
@@ -175,7 +196,8 @@ def test_get_data_preview_only_skips_fetching(mock_get_json, mock_get_combos, cd
     assert cdh.n_calls == 1
     # Check that the data-fetching part of _get_json_from_url was not called
     assert mock_get_json.call_count == 3  # Only setup calls
-    assert response is None
+    assert isinstance(response, CenDatResponse)
+    assert not response._data  # The response should contain no results
 
 
 @pytest.mark.unit
@@ -265,11 +287,7 @@ def test_get_data_expands_within_clauses_correctly(mock_get_json, mock_get_combo
     cdh.set_variables(names="B01001_001E")
     response = cdh.get_data(within=[{"state": "08", "county": "123"}, {"state": "56"}])
 
-    assert mock_get_combos.call_count == 2
-    first_call_args = mock_get_combos.call_args_list[0]
-    assert first_call_args.args[2] == {"state": "08", "county": "123"}
-    second_call_args = mock_get_combos.call_args_list[1]
-    assert second_call_args.args[2] == {"state": "56"}
+    assert mock_get_combos.call_count == 0
     assert isinstance(response, CenDatResponse)
     assert len(response._data[0]["data"]) == 2
 
@@ -297,12 +315,7 @@ def test_get_data_handles_complex_list_expansion(mock_get_json, mock_get_combos,
         within=[{"state": "08", "county": ["069", "123"]}, {"state": ["36", "06"]}]
     )
 
-    assert mock_get_combos.call_count == 4
-    call_args = [call.args for call in mock_get_combos.call_args_list]
-    assert call_args[0][2] == {"state": "08", "county": "069"}
-    assert call_args[1][2] == {"state": "08", "county": "123"}
-    assert call_args[2][2] == {"state": "36"}
-    assert call_args[3][2] == {"state": "06"}
+    assert mock_get_combos.call_count == 0
     assert isinstance(response, CenDatResponse)
     assert len(response._data[0]["data"]) == 4
 
@@ -483,3 +496,186 @@ def test_get_data_with_specific_target_geos(mock_get, mock_get_combos, cdh):
     final_call_args = mock_get.call_args
     assert final_call_args.kwargs["params"]["for"] == "tract:001201"
     assert final_call_args.kwargs["params"]["in"] == "state:08 county:069"
+
+
+@pytest.mark.unit
+@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.client.CenDatHelper._get_json_from_url")
+def test_get_data_uses_wildcard_correctly(mock_get_json, mock_get_combos, cdh):
+    """
+    Tests that get_data correctly uses a wildcard for the most granular,
+    unspecified required geography.
+    """
+    # --- Arrange ---
+    mock_get_json.side_effect = [
+        SIMPLE_PRODUCTS_JSON,
+        FAKE_GEOS_JSON,
+        SIMPLE_VARIABLES_JSON,
+        # This is the final data call, which we will inspect
+        [["B01001_001E", "state", "county", "tract"], ["1234", "08", "069", "001201"]],
+    ]
+
+    # --- Act ---
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_geos(values="tract", by="desc")  # Requires state and county
+    cdh.set_variables(names="B01001_001E")
+    cdh.get_data(within={"state": "08"})  # Only state is provided
+
+    # --- Assert ---
+    # 1. Check that discovery was NOT called, since the logic can proceed directly
+    # to building the wildcard query with the provided state.
+    mock_get_combos.assert_not_called()
+
+    # 2. Check that the final data-fetching call uses the wildcard for county.
+    assert mock_get_json.call_count == 3 + 1  # 3 setup calls, 1 data call
+
+    final_data_call = mock_get_json.call_args_list[-1]
+    params = final_data_call.args[1]
+    assert params["for"] == "tract:*"
+    assert params["in"] == "state:08"
+
+
+@pytest.mark.unit
+@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.client.CenDatHelper._get_json_from_url")
+def test_get_data_uses_wildcard_correctly2(mock_get_json, mock_get_combos, cdh):
+    """
+    Tests that get_data correctly uses a wildcard for the most granular,
+    unspecified required geography.
+    """
+    # --- Arrange ---
+    mock_get_json.side_effect = [
+        SIMPLE_PRODUCTS_JSON,
+        FAKE_GEOS_JSON,
+        SIMPLE_VARIABLES_JSON,
+        # This is the final data call, which we will inspect
+        [
+            ["B01001_001E", "state", "county", "tract", "block group"],
+            ["1234", "08", "069", "001201", "1"],
+        ],
+    ]
+
+    # --- Act ---
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_geos(values="block group", by="desc")  # Requires state and county
+    cdh.set_variables(names="B01001_001E")
+    cdh.get_data(within={"state": "08"})  # Only state is provided
+
+    # --- Assert ---
+    # 1. Check that discovery was NOT called, since the logic can proceed directly
+    # to building the wildcard query with the provided state.
+    mock_get_combos.assert_not_called()
+
+    # 2. Check that the final data-fetching call uses the wildcard for county.
+    assert mock_get_json.call_count == 3 + 1  # 3 setup calls, 1 data call
+
+    final_data_call = mock_get_json.call_args_list[-1]
+    params = final_data_call.args[1]
+    assert params["for"] == "block group:*"
+    assert params["in"] == "state:08 county:*"
+
+
+@pytest.mark.unit
+@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.client.CenDatHelper._get_json_from_url")
+def test_get_data_wildcard_with_us_scope(mock_get_json, mock_get_combos, cdh):
+    """
+    Tests the 'Everything' case: a granular geo with no 'within' clause,
+    triggering state discovery followed by wildcard calls for each state.
+    """
+    # --- Arrange ---
+    mock_get_json.side_effect = [
+        SIMPLE_PRODUCTS_JSON,
+        FAKE_GEOS_JSON,
+        SIMPLE_VARIABLES_JSON,
+        [["B01001_001E"], ["100"]],  # Data for state 01
+        [["B01001_001E"], ["200"]],  # Data for state 02
+    ]
+    # Mock the discovery of states
+    mock_get_combos.return_value = [{"state": "01"}, {"state": "02"}]
+
+    # --- Act ---
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_geos(values="tract", by="desc")  # Requires state and county
+    cdh.set_variables(names="B01001_001E")
+    cdh.get_data()  # No parent geos provided
+
+    # --- Assert ---
+    # 1. Discovery should be called once to find all states
+    mock_get_combos.assert_called_once()
+    assert mock_get_combos.call_args.args[1] == ["state"]  # Should fetch states
+
+    # 2. Two data calls should be made, one for each discovered state
+    assert mock_get_json.call_count == 3 + 2
+
+    call1_params = mock_get_json.call_args_list[-2].args[1]
+    call2_params = mock_get_json.call_args_list[-1].args[1]
+
+    assert call1_params["for"] == "tract:*"
+    assert call1_params["in"] == "state:01"
+    assert call2_params["for"] == "tract:*"
+    assert call2_params["in"] == "state:02"
+
+
+@pytest.mark.unit
+@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.client.CenDatHelper._get_json_from_url")
+def test_get_data_no_requirements_bypasses_wildcard(
+    mock_get_json, mock_get_combos, cdh
+):
+    """
+    Tests that a geography with no requirements (like 'state') bypasses
+    the wildcard and discovery logic entirely.
+    """
+    # --- Arrange ---
+    mock_get_json.side_effect = [
+        SIMPLE_PRODUCTS_JSON,
+        FAKE_GEOS_JSON,
+        SIMPLE_VARIABLES_JSON,
+        [["B01001_001E", "state"], ["1234", "01"]],
+    ]
+
+    # --- Act ---
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_geos(values="state", by="desc")  # No requirements
+    cdh.set_variables(names="B01001_001E")
+    cdh.get_data()  # Default within='us'
+
+    # --- Assert ---
+    mock_get_combos.assert_not_called()
+
+    assert mock_get_json.call_count == 3 + 1
+    final_call_params = mock_get_json.call_args.args[1]
+    assert final_call_params["for"] == "state:*"
+    assert "in" not in final_call_params
+
+
+@pytest.mark.unit
+@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.client.CenDatHelper._get_json_from_url")
+def test_get_data_single_requirement_uses_wildcard(mock_get_json, mock_get_combos, cdh):
+    """
+    Tests that a geo with a single requirement uses a wildcard for that
+    requirement if it's not provided.
+    """
+    # --- Arrange ---
+    mock_get_json.side_effect = [
+        SIMPLE_PRODUCTS_JSON,
+        FAKE_GEOS_JSON,
+        SIMPLE_VARIABLES_JSON,
+        [["B01001_001E", "state", "county"], ["1234", "01", "001"]],
+    ]
+
+    # --- Act ---
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_geos(values="county", by="desc")  # Requires 'state'
+    cdh.set_variables(names="B01001_001E")
+    cdh.get_data()  # Default within='us'
+
+    # --- Assert ---
+    mock_get_combos.assert_not_called()
+
+    assert mock_get_json.call_count == 3 + 1
+    final_call_params = mock_get_json.call_args.args[1]
+    assert final_call_params["for"] == "county:*"
+    assert "in" not in final_call_params
