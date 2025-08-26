@@ -27,7 +27,7 @@ class CenDatResponse:
 
         Args:
             data (List[Dict]): The list of dictionaries representing the
-                                API response data, typically from CenDatHelper.
+                                 API response data, typically from CenDatHelper.
         """
         self._data = data
         self.OPERATOR_MAP = {
@@ -1259,7 +1259,6 @@ class CenDatHelper:
             List[Dict]: A list of dictionaries, where each dict is a valid
                         `in` clause for a data request.
         """
-
         if not required_geos:
             return [current_in_clause]
         level_to_fetch = required_geos[0]
@@ -1292,6 +1291,7 @@ class CenDatHelper:
                     remaining_levels,
                     {**current_in_clause, level_to_fetch: row[fips_index]},
                     timeout=timeout,
+                    max_workers=max_workers,
                 ): row[fips_index]
                 for row in data[1:]
             }
@@ -1440,21 +1440,20 @@ class CenDatHelper:
                         all_tasks.append((vintage_url, api_params, context))
                         continue
 
-                    # NUANCED WILDCARD LOGIC: "Template and Override" model
-                    base_template = {}
+                    # FIX: This block contains the corrected logic for handling wildcards and discovery.
+                    final_in_clause = {}
                     if required_geos:
                         for geo in required_geos:
-                            if param.get("wildcard") and geo in param["wildcard"]:
-                                base_template[geo] = "*"
+                            if geo in provided_parent_geos:
+                                final_in_clause[geo] = provided_parent_geos[geo]
+                            elif param.get("wildcard") and geo in param["wildcard"]:
+                                final_in_clause[geo] = "*"
                             else:
-                                base_template[geo] = None
+                                final_in_clause[geo] = None  # Needs discovery
 
                     optional_level = param.get("optionalWithWCFor")
                     if optional_level and optional_level not in provided_parent_geos:
-                        base_template.pop(optional_level, None)
-
-                    final_in_clause = base_template.copy()
-                    final_in_clause.update(provided_parent_geos)
+                        final_in_clause.pop(optional_level, None)
 
                     geos_to_fetch = [
                         geo for geo, code in final_in_clause.items() if code is None
@@ -1478,9 +1477,10 @@ class CenDatHelper:
                     else:
                         combinations = [final_in_clause]
 
-                    print(
-                        f"✅ Found {len(combinations)} combinations. Building API queries..."
-                    )
+                    if combinations:
+                        print(
+                            f"✅ Found {len(combinations)} combinations. Building API queries..."
+                        )
 
                     for combo in combinations:
                         call_in_clause = final_in_clause.copy()
