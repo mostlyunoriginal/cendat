@@ -1260,10 +1260,6 @@ class CenDatHelper:
                         `in` clause for a data request.
         """
 
-        print("CALLED _get_parent_geo_combinations")
-        print(f"{required_geos=}")
-        print(f"{current_in_clause=}")
-
         if not required_geos:
             return [current_in_clause]
         level_to_fetch = required_geos[0]
