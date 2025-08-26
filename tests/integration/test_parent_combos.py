@@ -95,7 +95,7 @@ def test_n_calls_block_groups():
     response = c.get_data(timeout=60, max_workers=25)
     n_rows = response.to_polars(concat=True).height
 
-    assert c["n_calls"] == 3221
+    assert c["n_calls"] == 52
     assert n_rows == check_calls
 
 
@@ -132,5 +132,5 @@ def test_n_calls_places_by_county():
     n_rows = response.to_polars(concat=True).height
 
     # there are three counties that don't contain places
-    assert c["n_calls"] == 52
+    assert c["n_calls"] == 3221
     assert n_rows == check_calls
