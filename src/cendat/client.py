@@ -26,7 +26,7 @@ class CenDatResponse:
 
         Args:
             data (List[Dict]): The list of dictionaries representing the
-                               API response data, typically from CenDatHelper.
+                                API response data, typically from CenDatHelper.
         """
         self._data = data
         self.OPERATOR_MAP = {
@@ -122,7 +122,7 @@ class CenDatResponse:
             destring (bool): If True, attempts to convert string representations
                              of numbers into native numeric types.
             _data (Optional[List[Dict]]): An optional alternative data source to
-                                          process, used internally by `tabulate`.
+                                           process, used internally by `tabulate`.
 
         Yields:
             tuple: A tuple containing the source item (dict), the processed data
@@ -960,6 +960,7 @@ class CenDatHelper:
                 sumlev = geo_info.get("geoLevelDisplay")
                 if not sumlev:
                     continue
+                # NUANCED WILDCARD LOGIC: Capture wildcard metadata
                 flat_geo_list.append(
                     {
                         "sumlev": sumlev,
@@ -967,6 +968,8 @@ class CenDatHelper:
                         "product": product["title"],
                         "vintage": product["vintage"],
                         "requires": geo_info.get("requires"),
+                        "wildcard": geo_info.get("wildcard"),
+                        "optionalWithWCFor": geo_info.get("optionalWithWCFor"),
                         "url": product["url"],
                     }
                 )
@@ -1203,6 +1206,7 @@ class CenDatHelper:
                     and geo["vintage"] == var_group["vintage"]
                     and geo["url"] == var_group["url"]
                 ):
+                    # NUANCED WILDCARD LOGIC: Pass wildcard metadata into params
                     self.params.append(
                         {
                             "product": geo["product"],
@@ -1210,6 +1214,8 @@ class CenDatHelper:
                             "sumlev": geo["sumlev"],
                             "desc": geo["desc"],
                             "requires": geo.get("requires"),
+                            "wildcard": geo.get("wildcard"),
+                            "optionalWithWCFor": geo.get("optionalWithWCFor"),
                             "names": var_group["names"],
                             "labels": var_group["labels"],
                             "values": var_group["values"],
@@ -1404,61 +1410,130 @@ class CenDatHelper:
 
                 elif product_info.get("is_aggregate"):
                     required_geos = param.get("requires") or []
-
                     provided_parent_geos = {}
+                    target_geo_codes = None
+
                     if isinstance(within_clause, dict):
                         within_copy = within_clause.copy()
                         target_geo_codes = within_copy.pop(target_geo, None)
+                        provided_parent_geos = {
+                            k: v for k, v in within_copy.items() if k in required_geos
+                        }
 
-                        if target_geo_codes:
-                            codes_str = (
-                                target_geo_codes
-                                if isinstance(target_geo_codes, str)
-                                else ",".join(target_geo_codes)
+                    if target_geo_codes:
+                        codes_str = (
+                            target_geo_codes
+                            if isinstance(target_geo_codes, str)
+                            else ",".join(map(str, target_geo_codes))
+                        )
+                        api_params = {
+                            "get": variable_names,
+                            "for": f"{target_geo}:{codes_str}",
+                        }
+                        if provided_parent_geos:
+                            api_params["in"] = " ".join(
+                                [f"{k}:{v}" for k, v in provided_parent_geos.items()]
                             )
+                        all_tasks.append((vintage_url, api_params, context))
+                        continue
+
+                    # NUANCED WILDCARD LOGIC: Overhauled logic starts here
+                    wildcard_level = None
+                    use_wildcard = False
+
+                    if required_geos:
+                        for geo in reversed(required_geos):
+                            if geo not in provided_parent_geos:
+                                wildcard_level = geo
+                                break
+
+                    if (
+                        wildcard_level
+                        and param.get("wildcard")
+                        and wildcard_level in param["wildcard"]
+                    ):
+                        use_wildcard = True
+
+                    if use_wildcard:
+                        wildcard_index = required_geos.index(wildcard_level)
+                        geos_to_fetch = [
+                            g
+                            for g in required_geos[:wildcard_index]
+                            if g not in provided_parent_geos
+                        ]
+
+                        combinations = []
+                        if geos_to_fetch:
+                            print(
+                                f"ℹ️ Using wildcard for '{wildcard_level}'. Fetching parent geographies for: {geos_to_fetch}"
+                            )
+                            combinations = self._get_parent_geo_combinations(
+                                vintage_url,
+                                geos_to_fetch,
+                                provided_parent_geos,
+                                timeout=timeout,
+                                max_workers=max_workers,
+                            )
+                        else:
+                            combinations = [provided_parent_geos]
+
+                        print(
+                            f"✅ Found {len(combinations)} parent combinations. Building wildcard queries..."
+                        )
+
+                        for combo in combinations:
+                            # NUANCED WILDCARD LOGIC: Build the full hierarchy with wildcards
+                            # for all unspecified levels that allow it.
+                            in_clause_parts = combo.copy()
+                            for geo in required_geos:
+                                if geo not in in_clause_parts and geo in param.get(
+                                    "wildcard", []
+                                ):
+                                    in_clause_parts[geo] = "*"
 
                             api_params = {
                                 "get": variable_names,
-                                "for": f"{target_geo}:{codes_str}",
+                                "for": f"{target_geo}:*",
+                                "in": " ".join(
+                                    [f"{k}:{v}" for k, v in in_clause_parts.items()]
+                                ),
                             }
-                            if within_copy:
+                            all_tasks.append((vintage_url, api_params, context))
+                    else:
+                        # Fallback to full discovery if wildcard is not allowed or not possible
+                        geos_to_fetch = [
+                            g for g in required_geos if g not in provided_parent_geos
+                        ]
+
+                        if geos_to_fetch:
+                            print(
+                                f"ℹ️ Wildcard not applicable. Fetching all parent geographies for '{param['desc']}'..."
+                            )
+                            combinations = self._get_parent_geo_combinations(
+                                vintage_url,
+                                geos_to_fetch,
+                                provided_parent_geos,
+                                timeout=timeout,
+                                max_workers=max_workers,
+                            )
+                            print(
+                                f"✅ Found {len(combinations)} combinations for '{param['desc']}' within the specified scope."
+                            )
+                        else:
+                            combinations = (
+                                [provided_parent_geos] if provided_parent_geos else [{}]
+                            )
+
+                        for combo in combinations:
+                            api_params = {
+                                "get": variable_names,
+                                "for": f"{target_geo}:*",
+                            }
+                            if combo:
                                 api_params["in"] = " ".join(
-                                    [f"{k}:{v}" for k, v in within_copy.items()]
+                                    [f"{k}:{v}" for k, v in combo.items()]
                                 )
                             all_tasks.append((vintage_url, api_params, context))
-                            continue
-
-                        else:
-                            provided_parent_geos = {
-                                k: v
-                                for k, v in within_clause.items()
-                                if k in required_geos
-                            }
-
-                    geos_to_fetch = [
-                        g for g in required_geos if g not in provided_parent_geos
-                    ]
-
-                    print(f"ℹ️ Fetching parent geographies for '{param['desc']}'...")
-                    combinations = self._get_parent_geo_combinations(
-                        vintage_url,
-                        geos_to_fetch,
-                        provided_parent_geos,
-                        timeout=timeout,
-                        max_workers=max_workers,
-                    )
-                    print(
-                        f"✅ Found {len(combinations)} combinations for '{param['desc']}' within the specified scope."
-                    )
-
-                    for combo in combinations:
-                        api_params = {"get": variable_names}
-                        if combo:
-                            api_params["in"] = " ".join(
-                                [f"{k}:{v}" for k, v in combo.items()]
-                            )
-                        api_params["for"] = f"{target_geo}:*"
-                        all_tasks.append((vintage_url, api_params, context))
 
         if not all_tasks:
             print("❌ Error: Could not determine any API calls to make.")
@@ -1468,6 +1543,14 @@ class CenDatHelper:
 
         if preview_only:
             print(f"ℹ️ Preview: this will yield {self.n_calls} API call(s).")
+            for i, (url, params, _) in enumerate(all_tasks[:5]):
+                print(
+                    f"  - Call {i+1}: {url}?get={params.get('get')}&for={params.get('for')}&in={params.get('in','')}"
+                )
+            if len(all_tasks) > 5:
+                print(f"  ... and {len(all_tasks) - 5} more.")
+            return CenDatResponse([])
+
         else:
             print(f"ℹ️ Making {self.n_calls} API call(s)...")
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
