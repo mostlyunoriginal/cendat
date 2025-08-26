@@ -1451,13 +1451,19 @@ class CenDatHelper:
                             else:
                                 final_in_clause[geo] = None  # Needs discovery
 
+                    print(f"{final_in_clause=}")
+
                     optional_level = param.get("optionalWithWCFor")
                     if optional_level and optional_level not in provided_parent_geos:
                         final_in_clause.pop(optional_level, None)
 
+                    print(f"{final_in_clause=}")
+
                     geos_to_fetch = [
                         geo for geo, code in final_in_clause.items() if code is None
                     ]
+
+                    print(f"{geos_to_fetch=}")
 
                     combinations = []
                     if geos_to_fetch:
