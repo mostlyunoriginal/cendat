@@ -1259,6 +1259,11 @@ class CenDatHelper:
             List[Dict]: A list of dictionaries, where each dict is a valid
                         `in` clause for a data request.
         """
+
+        print("CALLED _get_parent_geo_combinations")
+        print(f"{required_geos=}")
+        print(f"{current_in_clause=}")
+
         if not required_geos:
             return [current_in_clause]
         level_to_fetch = required_geos[0]
@@ -1448,16 +1453,12 @@ class CenDatHelper:
                             else:
                                 base_template[geo] = None
 
-                    print(f"{base_template=}")
-
                     optional_level = param.get("optionalWithWCFor")
                     if optional_level and optional_level not in provided_parent_geos:
                         base_template.pop(optional_level, None)
 
                     final_in_clause = base_template.copy()
                     final_in_clause.update(provided_parent_geos)
-
-                    print(f"{final_in_clause=}")
 
                     geos_to_fetch = [
                         geo for geo, code in final_in_clause.items() if code is None
