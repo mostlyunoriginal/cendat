@@ -681,10 +681,6 @@ def test_get_data_single_requirement_uses_wildcard(mock_get_json, mock_get_combo
     assert "in" not in final_call_params
 
 
-from unittest.mock import patch
-import pytest
-
-
 @pytest.mark.unit
 @patch("cendat.client.CenDatHelper._get_json_from_url")
 def test_get_data_include_names_adds_name_to_api_call(mock_get_json, cdh):

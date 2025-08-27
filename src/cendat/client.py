@@ -1378,8 +1378,6 @@ class CenDatHelper:
             if include_names:
                 vars_to_get.insert(0, "NAME")
             variable_names = ",".join(vars_to_get)
-
-            # variable_names = ",".join(param["names"])
             target_geo = param["desc"]
             vintage_url = param["url"]
             context = {"param_index": i}
