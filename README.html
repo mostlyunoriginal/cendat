@@ -88,6 +88,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
 <p><code>cendat</code> is a Python library designed to simplify the process of exploring and retrieving data from the U.S. Census Bureau’s API. It provides a high-level, intuitive workflow for discovering available datasets, filtering geographies and variables, and fetching data concurrently.</p>
 <p>The library handles the complexities of the Census API’s structure, such as geographic hierarchies and inconsistent product naming, allowing you to focus on getting the data you need.</p>
+<p>You can find regular <code>cendat</code> updates and musings on the <a href="https://mostlyunoriginal.github.io/posts.html#category=cendat">developer blog</a>.</p>
 </section>
 <section id="workflow" class="level2">
 <h2 class="anchored" data-anchor-id="workflow">Workflow</h2>
@@ -199,8 +200,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong><code>names</code></strong> (<code>str</code> | <code>list[str]</code>, optional): The name or list of names of the variables to set. If <code>None</code>, sets all variables from the last <code>list_variables()</code> call.</li>
 </ul>
 </section>
-<section id="get_dataself-withinus-max_workers100-timeout30-preview_onlyfalse" class="level3">
-<h3 class="anchored" data-anchor-id="get_dataself-withinus-max_workers100-timeout30-preview_onlyfalse"><code>get_data(self, within='us', max_workers=100, timeout=30, preview_only=False)</code></h3>
+<section id="get_dataself-withinus-max_workers100-timeout30-preview_onlyfalse-include_namesfalse" class="level3">
+<h3 class="anchored" data-anchor-id="get_dataself-withinus-max_workers100-timeout30-preview_onlyfalse-include_namesfalse"><code>get_data(self, within='us', max_workers=100, timeout=30, preview_only=False, include_names=False)</code></h3>
 <p>Executes the API calls based on the set parameters and retrieves the data.</p>
 <ul>
 <li><strong><code>within</code></strong> (<code>str</code> | <code>dict</code> | <code>list[dict]</code>, optional): Defines the geographic scope of the query.
@@ -212,6 +213,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong><code>max_workers</code></strong> (<code>int</code>, optional): The maximum number of concurrent threads to use for making API calls. For requests generating thousands of calls, it’s wise to keep this value lower (e.g., <code>&lt; 100</code>) to avoid server-side connection issues. Defaults to <code>100</code>.</li>
 <li><strong><code>timeout</code></strong> (<code>int</code>, optional): Request timeout in seconds for each API call. Defaults to <code>30</code>.</li>
 <li><strong><code>preview_only</code></strong> (<code>bool</code>, optional): If <code>True</code>, builds the list of API calls but does not execute them. Useful for debugging. Defaults to <code>False</code>.</li>
+<li><strong><code>include_names</code></strong> (<code>bool</code>, optional): If <code>True</code>, includes geography name (<code>NAME</code>) in API request–this variable is a special keyword understood by the data endpoint but is not included in <code>variables.json</code> and is therefore not discoverable through <code>list_variables()</code>. Defaults to <code>False</code>.</li>
 </ul>
 <hr>
 </section>
