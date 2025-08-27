@@ -679,3 +679,37 @@ def test_get_data_single_requirement_uses_wildcard(mock_get_json, mock_get_combo
     final_call_params = mock_get_json.call_args.args[1]
     assert final_call_params["for"] == "county:*"
     assert "in" not in final_call_params
+
+
+@pytest.mark.unit
+@patch("cendat.client.CenDatHelper._get_json_from_url")
+def test_get_data_include_names_adds_name_to_api_call(mock_get_json, cdh):
+    """
+    Tests that get_data(include_names=True) correctly prepends 'NAME' to the
+    'get' parameter in the final API call.
+    """
+    # --- Arrange ---
+    # Mock the sequence of JSON metadata calls, followed by the final data call
+    mock_get_json.side_effect = [
+        SIMPLE_PRODUCTS_JSON,
+        FAKE_GEOS_JSON,
+        SIMPLE_VARIABLES_JSON,
+        # Mock data response for the final API call we will inspect
+        [["NAME", "B01001_001E", "state"], ["Colorado", "5877610", "08"]],
+    ]
+
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_geos(values="state", by="desc")
+    cdh.set_variables(names="B01001_001E")
+
+    # --- Act ---
+    cdh.get_data(include_names=True)
+
+    # --- Assert ---
+    # The last call to the mock should be the actual data request
+    final_call = mock_get_json.call_args
+    # The call arguments are passed as a tuple (url, params_dict)
+    api_params = final_call[0][1]
+
+    # Check that 'NAME' was added to the 'get' string, before the data variable
+    assert api_params["get"] == "NAME,B01001_001E"

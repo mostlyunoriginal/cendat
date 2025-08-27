@@ -6,6 +6,8 @@
 
 The library handles the complexities of the Census API’s structure, such as geographic hierarchies and inconsistent product naming, allowing you to focus on getting the data you need.
 
+You can find regular `cendat` updates and musings on the [developer blog](https://mostlyunoriginal.github.io/posts.html#category=cendat).
+
 ## Workflow
 
 The library is designed around a simple, four-step “List -> Set -> Get -> Convert” workflow:
@@ -118,7 +120,7 @@ Sets the active variables for the session.
 
 -   **`names`** (`str` | `list[str]`, optional): The name or list of names of the variables to set. If `None`, sets all variables from the last `list_variables()` call.
 
-### `get_data(self, within='us', max_workers=100, timeout=30, preview_only=False)`
+### `get_data(self, within='us', max_workers=100, timeout=30, preview_only=False, include_names=False)`
 
 Executes the API calls based on the set parameters and retrieves the data.
 
@@ -129,6 +131,7 @@ Executes the API calls based on the set parameters and retrieves the data.
 -   **`max_workers`** (`int`, optional): The maximum number of concurrent threads to use for making API calls. For requests generating thousands of calls, it's wise to keep this value lower (e.g., `< 100`) to avoid server-side connection issues. Defaults to `100`.
 -   **`timeout`** (`int`, optional): Request timeout in seconds for each API call. Defaults to `30`.
 -   **`preview_only`** (`bool`, optional): If `True`, builds the list of API calls but does not execute them. Useful for debugging. Defaults to `False`.
+-   **`include_names`** (`bool`, optional): If `True`, includes geography name (`NAME`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Defaults to `False`.
 
 ---
 

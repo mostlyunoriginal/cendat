@@ -1305,6 +1305,7 @@ class CenDatHelper:
         max_workers: Optional[int] = 100,
         timeout: int = 30,
         preview_only: bool = False,
+        include_names: bool = False,
     ) -> "CenDatResponse":
         """
         Retrieves data from the Census API based on the set parameters.
@@ -1373,7 +1374,10 @@ class CenDatHelper:
             if not product_info:
                 continue
 
-            variable_names = ",".join(param["names"])
+            vars_to_get = param["names"].copy()
+            if include_names:
+                vars_to_get.insert(0, "NAME")
+            variable_names = ",".join(vars_to_get)
             target_geo = param["desc"]
             vintage_url = param["url"]
             context = {"param_index": i}
