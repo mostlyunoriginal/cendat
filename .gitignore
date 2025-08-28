@@ -1,4 +1,4 @@
 .env
 .venv
-scratch.py
+scratch*.py
 README_prior.md
