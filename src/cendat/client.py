@@ -1164,6 +1164,94 @@ class CenDatHelper:
         unique_names = sorted(list(set(g["name"] for g in self.groups)))
         print(f"✅ Groups set: {', '.join(unique_names)}")
 
+    def describe_groups(self, groups: Optional[Union[str, List[str]]] = None):
+        """
+        Displays the variables within specified groups in a formatted, indented list.
+
+        This method fetches all variables for the currently set products and
+        filters them to show only those belonging to the specified groups. The
+        output is formatted to reflect the hierarchical structure of the variables
+        as indicated by their labels.
+
+        Args:
+            groups (Union[str, List[str]], optional): A group name or list of
+                names to describe. If None, it will use the groups previously
+                set on the helper object via `set_groups()`.
+        """
+        if not self.products:
+            print("❌ Error: Products must be set first via `set_products()`.")
+            return
+
+        # Determine which groups to filter by
+        groups_to_filter = None
+        if groups is not None:
+            groups_to_filter = groups
+        elif self.groups:
+            groups_to_filter = [g["name"] for g in self.groups]
+
+        if not groups_to_filter:
+            print(
+                "❌ Error: No groups specified or set. Use `set_groups()` or the 'groups' parameter."
+            )
+            return
+
+        if isinstance(groups_to_filter, str):
+            groups_to_filter = [groups_to_filter]
+
+        group_set = set(groups_to_filter)
+
+        # Fetch all variables and group descriptions
+        all_vars = self.list_variables(to_dicts=True)
+        all_groups_details = self.list_groups(to_dicts=True)
+
+        # Create a lookup for group descriptions
+        group_descriptions = {g["name"]: g["description"] for g in all_groups_details}
+
+        # Filter variables that belong to the selected groups
+        group_vars = [v for v in all_vars if v.get("group") in group_set]
+
+        if not group_vars:
+            print(
+                f"ℹ️ No variables found for the specified group(s): {', '.join(group_set)}"
+            )
+            return
+
+        # Organize variables by group and product/vintage for structured printing
+        vars_by_group_product = {}
+        for var in group_vars:
+            key = (var["group"], var["product"], var["vintage"][0])
+            if key not in vars_by_group_product:
+                vars_by_group_product[key] = []
+            vars_by_group_product[key].append(var)
+
+        # Print the formatted output
+        last_group_printed = None
+        for key in sorted(vars_by_group_product.keys()):
+            group_name, product_title, vintage = key
+
+            if group_name != last_group_printed:
+                group_desc = group_descriptions.get(
+                    group_name, "No description available."
+                )
+                print(f"\n--- Group: {group_name} ({group_desc}) ---")
+                last_group_printed = group_name
+
+            print(f"\n  Product: {product_title} (Vintage: {vintage})")
+
+            sorted_vars = sorted(vars_by_group_product[key], key=lambda x: x["name"])
+
+            for var in sorted_vars:
+                label = var.get("label", "")
+
+                # Use the count of '!!' as a reliable depth indicator
+                depth = label.count("!!")
+                indent = "  " * depth
+
+                # Get the last part of the label after splitting by '!!'
+                final_label_part = label.split("!!")[-1]
+
+                print(f"    {indent}{var['name']}: {final_label_part.strip()}")
+
     def list_variables(
         self,
         to_dicts: bool = True,
