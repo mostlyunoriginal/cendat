@@ -615,6 +615,7 @@ class CenDatHelper:
         years (List[int]): The primary year or years of interest for data queries.
         products (List[Dict]): The currently selected data product details.
         geos (List[Dict]): The currently selected geographies.
+        groups (List[Dict]): The currently selected variable groups.
         variables (List[Dict]): The currently selected variables.
         params (List[Dict]): The combined geo/variable parameters for API calls.
         n_calls (int): The number of API calls that will be made by get_data().
@@ -636,12 +637,14 @@ class CenDatHelper:
         self.years: Optional[List[int]] = None
         self.products: List[Dict] = []
         self.geos: List[Dict] = []
+        self.groups: List[Dict] = []
         self.variables: List[Dict] = []
         self.params: List[Dict] = []
         self.__key: Optional[str] = None
         self._products_cache: Optional[List[Dict[str, str]]] = None
         self._filtered_products_cache: Optional[List[Dict]] = None
         self._filtered_geos_cache: Optional[List[Dict]] = None
+        self._filtered_groups_cache: Optional[List[Dict]] = None
         self._filtered_variables_cache: Optional[List[Dict]] = None
         self.n_calls: Optional[int] = None
 
@@ -656,7 +659,7 @@ class CenDatHelper:
 
         Args:
             key (str): The attribute to access. One of 'products', 'geos',
-                       'variables', 'params', or 'n_calls'.
+                       'groups', 'variables', 'params', or 'n_calls'.
 
         Returns:
             The value of the requested attribute.
@@ -668,6 +671,8 @@ class CenDatHelper:
             return self.products
         elif key == "geos":
             return self.geos
+        elif key == "groups":
+            return self.groups
         elif key == "variables":
             return self.variables
         elif key == "params":
@@ -676,7 +681,7 @@ class CenDatHelper:
             return self.n_calls
         else:
             raise KeyError(
-                f"'{key}' is not a valid key. Available keys are: 'products', 'geos', 'variables', 'params', 'n_calls'"
+                f"'{key}' is not a valid key. Available keys are: 'products', 'geos', 'groups', 'variables', 'params', 'n_calls'"
             )
 
     def set_years(self, years: Union[int, List[int]]):
@@ -1060,12 +1065,112 @@ class CenDatHelper:
                 message_parts.append(f"'{desc}'")
         print(f"✅ Geographies set: {', '.join(message_parts)}")
 
+    def list_groups(
+        self,
+        to_dicts: bool = True,
+        patterns: Optional[Union[str, List[str]]] = None,
+        logic: Callable[[iter], bool] = all,
+        match_in: str = "description",
+    ) -> Union[List[str], List[Dict[str, str]]]:
+        """
+        Lists available variable groups for the currently set products.
+
+        Args:
+            to_dicts (bool): If True (default), returns a list of dictionaries
+                with full group details. If False, returns a sorted list of
+                unique group names.
+            patterns (Union[str, List[str]], optional): A regex pattern or list
+                of patterns to search for in the group metadata.
+            logic (Callable): The function to apply when multiple `patterns` are
+                provided. Use `all` (default) for AND logic or `any` for OR logic.
+            match_in (str): The metadata field to search within. Must be
+                'description' (default) or 'name'.
+
+        Returns:
+            A list of group dictionaries or a list of group name strings.
+        """
+        if not self.products:
+            print("❌ Error: Products must be set first via `set_products()`.")
+            return []
+
+        flat_group_list = []
+        for product in self.products:
+            url = f"{product['base_url']}/groups.json"
+            data = self._get_json_from_url(url)
+            if not data or "groups" not in data:
+                continue
+            for group_details in data["groups"]:
+                flat_group_list.append(
+                    {
+                        "name": group_details.get("name", "N/A"),
+                        "description": group_details.get("description", "N/A"),
+                        "product": product["title"],
+                        "vintage": product["vintage"],
+                        "url": product["url"],
+                    }
+                )
+        result_list = flat_group_list
+
+        if match_in not in ["description", "name"]:
+            print("❌ Error: `match_in` must be either 'description' or 'name'.")
+            return []
+
+        if patterns:
+            pattern_list = [patterns] if isinstance(patterns, str) else patterns
+            try:
+                regexes = [re.compile(p, re.IGNORECASE) for p in pattern_list]
+                result_list = [
+                    g
+                    for g in result_list
+                    if g.get(match_in)
+                    and logic(regex.search(g[match_in]) for regex in regexes)
+                ]
+            except re.error as e:
+                print(f"❌ Invalid regex pattern: {e}")
+                return []
+
+        self._filtered_groups_cache = result_list
+        return (
+            result_list
+            if to_dicts
+            else sorted(list(set([g["name"] for g in result_list])))
+        )
+
+    def set_groups(self, names: Optional[Union[str, List[str]]] = None):
+        """
+        Sets the active variable groups for subsequent method calls.
+
+        Args:
+            names (Union[str, List[str]], optional): The name or list of names
+                of the groups to set. If None, sets all groups from the
+                last `list_groups` call.
+        """
+        groups_to_set = []
+        if names is None:
+            if not self._filtered_groups_cache:
+                print("❌ Error: No groups to set. Run `list_groups` first.")
+                return
+            groups_to_set = self._filtered_groups_cache
+        else:
+            name_list = [names] if isinstance(names, str) else names
+            all_groups = self.list_groups(to_dicts=True)
+            groups_to_set = [g for g in all_groups if g.get("name") in name_list]
+
+        if not groups_to_set:
+            print("❌ Error: No valid groups were found to set.")
+            return
+
+        self.groups = groups_to_set
+        unique_names = sorted(list(set(g["name"] for g in self.groups)))
+        print(f"✅ Groups set: {', '.join(unique_names)}")
+
     def list_variables(
         self,
         to_dicts: bool = True,
         patterns: Optional[Union[str, List[str]]] = None,
         logic: Callable[[iter], bool] = all,
         match_in: str = "label",
+        groups: Optional[Union[str, List[str]]] = None,
     ) -> Union[List[str], List[Dict[str, str]]]:
         """
         Lists available variables for the currently set products.
@@ -1080,6 +1185,9 @@ class CenDatHelper:
                 provided. Use `all` (default) for AND logic or `any` for OR logic.
             match_in (str): The metadata field to search within. Must be 'label'
                 (default), 'name', or 'concept'.
+            groups (Union[str, List[str]], optional): A group name or list of
+                names to filter variables by. If provided, only variables
+                belonging to these groups will be returned.
 
         Returns:
             A list of variable dictionaries or a list of variable name strings.
@@ -1111,6 +1219,23 @@ class CenDatHelper:
                     }
                 )
         result_list = flat_variable_list
+
+        # Determine which groups to filter by: use the 'groups' parameter if
+        # provided, otherwise fall back to the groups set on the object.
+        groups_to_filter = None
+        if groups is not None:
+            groups_to_filter = groups
+        elif self.groups:
+            # Extract group names from the list of group dictionaries
+            groups_to_filter = [g["name"] for g in self.groups]
+
+        # Apply the group filter if there are any groups to filter by
+        if groups_to_filter:
+            # Ensure groups_to_filter is a list for set creation
+            if isinstance(groups_to_filter, str):
+                groups_to_filter = [groups_to_filter]
+            group_set = set(groups_to_filter)
+            result_list = [v for v in result_list if v.get("group") in group_set]
 
         if match_in not in ["label", "name", "concept"]:
             print("❌ Error: `match_in` must be either 'label', 'name', or 'concept'.")
