@@ -10,20 +10,20 @@ You can find regular `cendat` updates and musings on the [developer blog](https:
 
 ## Workflow
 
-The library is designed around a simple, four-step “List -> Set -> Get -> Convert” workflow:
+The library is designed around a simple, four-step “List -\> Set -\> Get -\> Convert” workflow:
 
 1.  **List**: Use the `list_*` methods (`list_products`, `list_geos`, `list_variables`) with patterns to explore what’s available and filter down to what you need.
 2.  **Set**: Use the `set_*` methods (`set_products`, `set_geos`, `set_variables`) to lock in your selections. You can call these methods without arguments to use the results from your last “List” call.
 3.  **Get**: Call the `get_data()` method to build and execute all the necessary API calls. This method handles complex geographic requirements automatically and utilizes thread pooling for speed.
 4.  **Convert & Analyze**: Use the `to_polars()` or `to_pandas()` methods on the response object to get your data in a ready-to-use DataFrame format. The response object also includes a powerful `tabulate()` method for quick, Stata-like frequency tables.
 
----
+------------------------------------------------------------------------
 
 # Installation
 
 You can install `cendat` using pip.
 
-```bash
+``` bash
 pip install cendat
 ```
 
@@ -31,23 +31,23 @@ The library has optional dependencies for converting the response data into pand
 
 ### Install with pandas support
 
-```bash
+``` bash
 pip install cendat[pandas]
 ```
 
 ### Install with polars support
 
-```bash
+``` bash
 pip install cendat[polars]
 ```
 
 ### Install with both
 
-```bash
+``` bash
 pip install cendat[all]
 ```
 
----
+------------------------------------------------------------------------
 
 # API Reference
 
@@ -59,14 +59,14 @@ This is the main class for building and executing queries.
 
 Initializes the helper object.
 
--   **`years`** (`int` | `list[int]`, optional): The year or years of interest. Can be a single integer or a list of integers. Defaults to `None`.
+-   **`years`** (`int` \| `list[int]`, optional): The year or years of interest. Can be a single integer or a list of integers. Defaults to `None`.
 -   **`key`** (`str`, optional): Your Census API key. Providing a key is recommended to avoid strict rate limits. Defaults to `None`.
 
 ### `set_years(self, years)`
 
 Sets the primary year or years for data queries.
 
--   **`years`** (`int` | `list[int]`): The year or years to set.
+-   **`years`** (`int` \| `list[int]`): The year or years to set.
 
 ### `load_key(self, key=None)`
 
@@ -78,8 +78,8 @@ Loads a Census API key for authenticated requests.
 
 Lists available data products, filtered by year and search patterns.
 
--   **`years`** (`int` | `list[int]`, optional): Filters products available for the specified year(s). Defaults to the years set on the object.
--   **`patterns`** (`str` | `list[str]`, optional): Regex pattern(s) to search for within the product metadata.
+-   **`years`** (`int` \| `list[int]`, optional): Filters products available for the specified year(s). Defaults to the years set on the object.
+-   **`patterns`** (`str` \| `list[str]`, optional): Regex pattern(s) to search for within the product metadata.
 -   **`to_dicts`** (`bool`): If `True` (default), returns a list of dictionaries with full product details. If `False`, returns a list of product titles.
 -   **`logic`** (`callable`): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
 -   **`match_in`** (`str`): The field to match patterns against. Can be `'title'` (default) or `'desc'`.
@@ -88,29 +88,44 @@ Lists available data products, filtered by year and search patterns.
 
 Sets the active data products for the session.
 
--   **`titles`** (`str` | `list[str]`, optional): The title or list of titles of the products to set. If `None`, it sets all products from the last `list_products()` call.
+-   **`titles`** (`str` \| `list[str]`, optional): The title or list of titles of the products to set. If `None`, it sets all products from the last `list_products()` call.
 
 ### `list_geos(self, to_dicts=False, patterns=None, logic=all)`
 
 Lists available geographies for the currently set products.
 
 -   **`to_dicts`** (`bool`): If `True`, returns a list of dictionaries with full geography details. If `False` (default), returns a list of unique summary level (`sumlev`) strings.
--   **`patterns`** (`str` | `list[str]`, optional): Regex pattern(s) to search for within the geography description.
+-   **`patterns`** (`str` \| `list[str]`, optional): Regex pattern(s) to search for within the geography description.
 -   **`logic`** (`callable`): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
 
 ### `set_geos(self, values=None, by='sumlev')`
 
 Sets the active geographies for the session.
 
--   **`values`** (`str` | `list[str]`, optional): The geography values to set. If `None`, sets all geos from the last `list_geos()` call.
+-   **`values`** (`str` \| `list[str]`, optional): The geography values to set. If `None`, sets all geos from the last `list_geos()` call.
 -   **`by`** (`str`): The key to use for matching `values`. Must be either `'sumlev'` (default) or `'desc'`.
+
+### `list_groups(self, to_dicts=True, patterns=None, logic=all, match_in='label')`
+
+Lists available variables for the currently set products.
+
+-   **`to_dicts`** (`bool`): If `True` (default), returns a list of dictionaries with full variable details. If `False`, returns a list of unique variable names.
+-   **`patterns`** (`str` \| `list[str]`, optional): Regex pattern(s) to search for within the variable metadata.
+-   **`logic`** (`callable`): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
+-   **`match_in`** (`str`): The field to match patterns against. Can be `'label'` (default), `'name'` or `'concept'`.
+
+### `set_groups(self, names=None)`
+
+Sets the active variables for the session.
+
+-   **`names`** (`str` \| `list[str]`, optional): The name or list of names of the variables to set. If `None`, sets all variables from the last `list_variables()` call.
 
 ### `list_variables(self, to_dicts=True, patterns=None, logic=all, match_in='label')`
 
 Lists available variables for the currently set products.
 
 -   **`to_dicts`** (`bool`): If `True` (default), returns a list of dictionaries with full variable details. If `False`, returns a list of unique variable names.
--   **`patterns`** (`str` | `list[str]`, optional): Regex pattern(s) to search for within the variable metadata.
+-   **`patterns`** (`str` \| `list[str]`, optional): Regex pattern(s) to search for within the variable metadata.
 -   **`logic`** (`callable`): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
 -   **`match_in`** (`str`): The field to match patterns against. Can be `'label'` (default), `'name'` or `'concept'`.
 
@@ -118,13 +133,13 @@ Lists available variables for the currently set products.
 
 Sets the active variables for the session.
 
--   **`names`** (`str` | `list[str]`, optional): The name or list of names of the variables to set. If `None`, sets all variables from the last `list_variables()` call.
+-   **`names`** (`str` \| `list[str]`, optional): The name or list of names of the variables to set. If `None`, sets all variables from the last `list_variables()` call.
 
 ### `get_data(self, within='us', max_workers=100, timeout=30, preview_only=False, include_names=False)`
 
 Executes the API calls based on the set parameters and retrieves the data.
 
--   **`within`** (`str` | `dict` | `list[dict]`, optional): Defines the geographic scope of the query.
+-   **`within`** (`str` \| `dict` \| `list[dict]`, optional): Defines the geographic scope of the query.
     -   For **aggregate** data, this can be a dictionary filtering parent geographies (e.g., `{'state': '06'}` for California). A list of dictionaries can be provided to query multiple scopes.
     -   For **microdata**, this must be a dictionary specifying the target geography and its codes (e.g., `{'public use microdata area': ['7701', '7702']}`).
     -   Defaults to `'us'` for nationwide data where applicable.
@@ -133,7 +148,7 @@ Executes the API calls based on the set parameters and retrieves the data.
 -   **`preview_only`** (`bool`, optional): If `True`, builds the list of API calls but does not execute them. Useful for debugging. Defaults to `False`.
 -   **`include_names`** (`bool`, optional): If `True`, includes geography name (`NAME`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Defaults to `False`.
 
----
+------------------------------------------------------------------------
 
 ## `CenDatResponse` Class
 
@@ -163,17 +178,17 @@ Generates and prints a frequency table.
 -   **`strat_by`** (`str`, optional): A column name to stratify the results by. Percentages and cumulative stats will be calculated within each stratum. Defaults to `None`.
 -   **`weight_var`** (`str`, optional): The name of the column to use for weighting. If `None`, each row has a weight of 1. Defaults to `None`.
 -   **`weight_div`** (`int`, optional): A positive integer to divide the weight by, useful for pooled tabulations across multiple product vintages. `weight_var` must be provided if this is used. Defaults to `None`.
--   **`where`** (`str` | `list[str]`, optional): A string or list of strings representing conditions to filter the data before tabulation. Each condition should be in a format like `"variable operator value"` (e.g., `"AGE > 30"`). Defaults to `None`.
+-   **`where`** (`str` \| `list[str]`, optional): A string or list of strings representing conditions to filter the data before tabulation. Each condition should be in a format like `"variable operator value"` (e.g., `"AGE > 30"`). Defaults to `None`.
 -   **`logic`** (`callable`): The function to apply when multiple `where` conditions are provided. Use `all` for AND logic (default) or `any` for OR logic.
 -   **`digits`** (`int`): The number of decimal places to display for floating-point numbers in the output table. Defaults to `1`.
 
----
+------------------------------------------------------------------------
 
 # Usage Example: Stratified Tabulation
 
 This example demonstrates how to retrieve ACS PUMS data and then use the `tabulate` method to create a stratified frequency table.
 
-```python
+``` python
 import os
 from cendat import CenDatHelper
 from dotenv import load_dotenv
@@ -209,5 +224,4 @@ response.tabulate(
 # `schema_overrides`.
 df = response.to_polars(concat=True, destring=True)
 print(df.head())
-
 ```
