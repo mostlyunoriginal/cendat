@@ -1300,6 +1300,7 @@ class CenDatHelper:
                         "group": details.get("group", "N/A"),
                         "values": details.get("values", "N/A"),
                         "type": details.get("predicateType", "N/A"),
+                        "attributes": details.get("attributes", "N/A"),
                         "sugg_wgt": details.get("suggested-weight", "N/A"),
                         "product": product["title"],
                         "vintage": product["vintage"],
@@ -1350,7 +1351,10 @@ class CenDatHelper:
             else sorted(list(set([v["name"] for v in result_list])))
         )
 
-    def set_variables(self, names: Optional[Union[str, List[str]]] = None):
+    def set_variables(
+        self,
+        names: Optional[Union[str, List[str]]] = None,
+    ):
         """
         Sets the active variables for data retrieval.
 
@@ -1384,11 +1388,12 @@ class CenDatHelper:
                     "labels": [],
                     "values": [],
                     "types": [],
+                    "attributes": [],
                     "sugg_wgts": [],
                 }
             for collapsed, granular in zip(
-                ["names", "labels", "values", "types", "sugg_wgts"],
-                ["name", "label", "values", "type", "sugg_wgt"],
+                ["names", "labels", "values", "types", "attributes", "sugg_wgts"],
+                ["name", "label", "values", "type", "attributes", "sugg_wgt"],
             ):
                 collapsed_vars[key][collapsed].append(var_info[granular])
         self.variables = list(collapsed_vars.values())
@@ -1434,6 +1439,7 @@ class CenDatHelper:
                             "labels": var_group["labels"],
                             "values": var_group["values"],
                             "types": var_group["types"],
+                            "attributes": var_group["attributes"],
                             "url": geo["url"],
                         }
                     )
@@ -1519,6 +1525,7 @@ class CenDatHelper:
         timeout: int = 30,
         preview_only: bool = False,
         include_names: bool = False,
+        include_attributes: bool = False,
     ) -> "CenDatResponse":
         """
         Retrieves data from the Census API based on the set parameters.
@@ -1590,6 +1597,19 @@ class CenDatHelper:
             vars_to_get = param["names"].copy()
             if include_names:
                 vars_to_get.insert(0, "NAME")
+            if include_attributes:
+                all_attributes = set()
+                # Iterate through the list of attribute strings for the selected variables
+                for attr_string in param.get("attributes", []):
+                    # Check if the string is valid and not the "N/A" placeholder
+                    if attr_string and attr_string != "N/A":
+                        # The 'attributes' key contains a comma-separated string of variable names.
+                        # We split this string and add the names to our set.
+                        all_attributes.update(attr_string.split(","))
+
+                # Add the unique, valid attributes to the list of variables to request.
+                if all_attributes:
+                    vars_to_get.extend(list(all_attributes))
             variable_names = ",".join(vars_to_get)
             target_geo = param["desc"]
             vintage_url = param["url"]
