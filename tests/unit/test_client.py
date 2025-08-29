@@ -73,9 +73,61 @@ FAKE_GEOS_JSON = {
 
 SIMPLE_VARIABLES_JSON = {
     "variables": {
-        "B01001_001E": {"label": "Total Population", "concept": "SEX BY AGE"},
-        "B19013_001E": {"label": "Median Household Income", "concept": "INCOME"},
-        "PUMA": {"label": "Public Use Microdata Area Code", "concept": "GEOGRAPHY"},
+        "B01001_001E": {
+            "label": "Total Population",
+            "concept": "SEX BY AGE",
+            "group": "B01001",
+        },
+        "B01001_002E": {
+            "label": "Estimate!!Total:!!Male:",
+            "concept": "SEX BY AGE",
+            "group": "B01001",
+        },
+        "B19013_001E": {
+            "label": "Median Household Income",
+            "concept": "INCOME",
+            "group": "B19013",
+        },
+        "PUMA": {
+            "label": "Public Use Microdata Area Code",
+            "concept": "GEOGRAPHY",
+            "group": "GEODATA",
+        },
+    }
+}
+
+SIMPLE_GROUPS_JSON = {
+    "groups": [
+        {"name": "B01001", "description": "SEX BY AGE"},
+        {
+            "name": "B19013",
+            "description": "MEDIAN HOUSEHOLD INCOME IN THE PAST 12 MONTHS",
+        },
+        {"name": "GEODATA", "description": "Geographic Identifiers"},
+    ]
+}
+
+# Add this with your other mock JSON constants
+VARIABLES_WITH_ATTRIBUTES_JSON = {
+    "variables": {
+        "B01001_001E": {
+            "label": "Estimate!!Total",
+            "concept": "SEX BY AGE",
+            "group": "B01001",
+            "attributes": "B01001_001EA,B01001_001MA",
+        },
+        "B01001_002E": {
+            "label": "Estimate!!Total!!Male",
+            "concept": "SEX BY AGE",
+            "group": "B01001",
+            "attributes": "N/A",
+        },
+        "B19013_001E": {
+            "label": "Estimate!!Median household income",
+            "concept": "MEDIAN HOUSEHOLD INCOME",
+            "group": "B19013",
+            # This variable is missing the attributes key
+        },
     }
 }
 
@@ -157,7 +209,11 @@ def test_list_variables_with_patterns_and_logic(mock_get, cdh):
     mock_product_response.json.return_value = SIMPLE_PRODUCTS_JSON
     mock_variable_response = Mock()
     mock_variable_response.json.return_value = SIMPLE_VARIABLES_JSON
-    mock_get.side_effect = [mock_product_response, mock_variable_response]
+    mock_get.side_effect = [
+        mock_product_response,
+        mock_variable_response,
+        mock_variable_response,
+    ]  # Called twice for variables
 
     cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
     variables = cdh.list_variables(
@@ -713,3 +769,242 @@ def test_get_data_include_names_adds_name_to_api_call(mock_get_json, cdh):
 
     # Check that 'NAME' was added to the 'get' string, before the data variable
     assert api_params["get"] == "NAME,B01001_001E"
+
+
+# --- 5. New Tests for Group Methods ---
+
+
+@pytest.mark.unit
+@patch("cendat.client.requests.get")
+def test_list_groups(mock_get, cdh):
+    """Tests the list_groups method for correctness and filtering."""
+    mock_product_response = Mock()
+    mock_product_response.json.return_value = SIMPLE_PRODUCTS_JSON
+    mock_group_response = Mock()
+    mock_group_response.json.return_value = SIMPLE_GROUPS_JSON
+    mock_get.side_effect = [
+        mock_product_response,
+        mock_group_response,
+        mock_group_response,
+    ]
+
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+
+    # Test listing all groups
+    groups = cdh.list_groups(to_dicts=False)
+    assert "B01001" in groups
+    assert "B19013" in groups
+    assert len(groups) == 3
+
+    # Test filtering with a pattern
+    groups_filtered = cdh.list_groups(patterns="SEX BY AGE", to_dicts=False)
+    assert "B01001" in groups_filtered
+    assert len(groups_filtered) == 1
+
+
+@pytest.mark.unit
+@patch("cendat.client.requests.get")
+def test_set_groups(mock_get, cdh):
+    """Tests the set_groups method."""
+    mock_product_response = Mock()
+    mock_product_response.json.return_value = SIMPLE_PRODUCTS_JSON
+    mock_group_response = Mock()
+    mock_group_response.json.return_value = SIMPLE_GROUPS_JSON
+    mock_get.side_effect = [
+        mock_product_response,
+        mock_group_response,
+        mock_group_response,
+    ]
+
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+
+    # Set groups by name
+    cdh.set_groups(names=["B01001", "GEODATA"])
+    assert len(cdh.groups) == 2
+    group_names = {g["name"] for g in cdh.groups}
+    assert {"B01001", "GEODATA"} == group_names
+
+    # Set groups from cache after listing
+    cdh.list_groups(patterns="INCOME")
+    cdh.set_groups()  # Should use the cached result
+    assert len(cdh.groups) == 1
+    assert cdh.groups[0]["name"] == "B19013"
+
+
+@pytest.mark.unit
+@patch("cendat.client.requests.get")
+def test_list_variables_with_group_filters(mock_get, cdh):
+    """Tests the group filtering logic in list_variables."""
+    mock_product_response = Mock()
+    mock_product_response.json.return_value = SIMPLE_PRODUCTS_JSON
+    mock_variable_response = Mock()
+    mock_variable_response.json.return_value = SIMPLE_VARIABLES_JSON
+    mock_group_response = Mock()
+    mock_group_response.json.return_value = SIMPLE_GROUPS_JSON
+
+    # Setup the sequence of mock calls
+    mock_get.side_effect = [
+        mock_product_response,
+        mock_variable_response,  # for list_variables(groups="B01001")
+        mock_group_response,  # for list_groups() inside set_groups("B19013")
+        mock_variable_response,  # for list_variables() after set_groups()
+        mock_variable_response,  # for the override test
+    ]
+
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+
+    # Test with 'groups' parameter
+    variables = cdh.list_variables(groups="B01001", to_dicts=False)
+    assert "B01001_001E" in variables
+    assert "B01001_002E" in variables
+    assert "B19013_001E" not in variables
+    assert len(variables) == 2
+
+    # Test with pre-set groups on the object
+    cdh.set_groups(names="B19013")
+    variables_from_set = cdh.list_variables(to_dicts=False)
+    assert "B19013_001E" in variables_from_set
+    assert len(variables_from_set) == 1
+
+    # Test that providing 'groups' parameter overrides set_groups
+    variables_overridden = cdh.list_variables(groups="GEODATA", to_dicts=False)
+    assert "PUMA" in variables_overridden
+    assert len(variables_overridden) == 1
+
+
+@pytest.mark.unit
+@patch("cendat.client.requests.get")
+def test_describe_groups(mock_get, cdh, capsys):
+    """Tests the describe_groups method for correct formatting and output."""
+    mock_product_response = Mock()
+    mock_product_response.json.return_value = SIMPLE_PRODUCTS_JSON
+    mock_variable_response = Mock()
+    mock_variable_response.json.return_value = SIMPLE_VARIABLES_JSON
+    mock_group_response = Mock()
+    mock_group_response.json.return_value = SIMPLE_GROUPS_JSON
+
+    mock_get.side_effect = [
+        mock_product_response,
+        mock_variable_response,  # for list_variables
+        mock_group_response,  # for list_groups
+    ]
+
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+
+    cdh.describe_groups(groups="B01001")
+    captured = capsys.readouterr().out
+
+    # Check for correct headers
+    assert "--- Group: B01001 (SEX BY AGE) ---" in captured
+    assert "Product: American Community Survey" in captured
+
+    # Check for correct variable formatting and indentation
+    # Using regex to be flexible with whitespace
+    assert re.search(r"B01001_001E:\s+Total Population", captured)
+    assert re.search(r"\s{4}B01001_002E:\s+Male:", captured)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "include_flag, expected_vars_set",
+    [
+        (
+            True,
+            {
+                "B01001_001E",
+                "B01001_002E",
+                "B19013_001E",
+                "B01001_001EA",
+                "B01001_001MA",
+            },
+        ),
+        (
+            False,
+            {"B01001_001E", "B01001_002E", "B19013_001E"},
+        ),
+    ],
+    ids=["include_attributes=True", "include_attributes=False"],
+)
+@patch("cendat.client.requests.get")
+def test_get_data_handles_include_attributes(
+    mock_get, cdh, include_flag, expected_vars_set
+):
+    """
+    Tests that `get_data` correctly handles the `include_attributes` flag,
+    properly requesting annotation/margin-of-error variables when True and
+    correctly ignoring "N/A" or missing attribute fields.
+    """
+    # --- Arrange ---
+    mock_product_response = Mock()
+    mock_product_response.json.return_value = SIMPLE_PRODUCTS_JSON
+    mock_geo_response = Mock()
+    mock_geo_response.json.return_value = FAKE_GEOS_JSON
+    mock_variable_response = Mock()
+    mock_variable_response.json.return_value = VARIABLES_WITH_ATTRIBUTES_JSON
+    mock_data_response = Mock()
+    mock_data_response.json.return_value = [["header"], ["data"]]
+
+    mock_get.side_effect = [
+        mock_product_response,
+        mock_geo_response,
+        mock_variable_response,
+        mock_data_response,
+    ]
+
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_geos(values="state", by="desc")
+    # Select one var with attributes, one with "N/A", and one with no attribute key
+    cdh.set_variables(names=["B01001_001E", "B01001_002E", "B19013_001E"])
+
+    # --- Act ---
+    cdh.get_data(within="us", include_attributes=include_flag)
+
+    # --- Assert ---
+    # The final call to requests.get should be the actual data call
+    final_params = mock_get.call_args.kwargs.get("params", {})
+    requested_vars_str = final_params.get("get", "")
+    requested_vars_set = set(requested_vars_str.split(","))
+
+    # Check that the set of requested variables matches the expected set
+    assert requested_vars_set == expected_vars_set
+
+
+@pytest.mark.unit
+@patch("cendat.client.requests.get")
+def test_get_data_handles_names_and_attributes_together(mock_get, cdh):
+    """
+    Tests that `get_data` correctly includes both NAME and attribute
+    variables when both flags are True.
+    """
+    # --- Arrange ---
+    mock_product_response = Mock()
+    mock_product_response.json.return_value = SIMPLE_PRODUCTS_JSON
+    mock_geo_response = Mock()
+    mock_geo_response.json.return_value = FAKE_GEOS_JSON
+    mock_variable_response = Mock()
+    mock_variable_response.json.return_value = VARIABLES_WITH_ATTRIBUTES_JSON
+    mock_data_response = Mock()
+    mock_data_response.json.return_value = [["header"], ["data"]]
+
+    mock_get.side_effect = [
+        mock_product_response,
+        mock_geo_response,
+        mock_variable_response,
+        mock_data_response,
+    ]
+
+    expected_vars_set = {"NAME", "B01001_001E", "B01001_001EA", "B01001_001MA"}
+
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_geos(values="state", by="desc")
+    cdh.set_variables(names=["B01001_001E"])  # Just one variable with attributes
+
+    # --- Act ---
+    cdh.get_data(within="us", include_attributes=True, include_names=True)
+
+    # --- Assert ---
+    final_params = mock_get.call_args.kwargs.get("params", {})
+    requested_vars_str = final_params.get("get", "")
+    requested_vars_set = set(requested_vars_str.split(","))
+
+    assert requested_vars_set == expected_vars_set
