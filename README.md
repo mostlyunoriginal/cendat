@@ -10,10 +10,10 @@ You can find regular `cendat` updates and musings on the [developer blog](https:
 
 ## Workflow
 
-The library is designed around a simple, four-step “List -\> Set -\> Get -\> Convert” workflow:
+The library is designed around a simple, four-step “List -\> Set -\> Get -\> Convert/Analyze” workflow:
 
-1.  **List**: Use the `list_*` methods (`list_products`, `list_geos`, `list_variables`) with patterns to explore what’s available and filter down to what you need.
-2.  **Set**: Use the `set_*` methods (`set_products`, `set_geos`, `set_variables`) to lock in your selections. You can call these methods without arguments to use the results from your last “List” call.
+1.  **List**: Use the `list_*` methods (`list_products`, `list_geos`, `list_groups`, `list_variables`) with patterns to explore what’s available and filter down to what you need.
+2.  **Set**: Use the `set_*` methods (`set_products`, `set_geos`, `set_groups`, `set_variables`) to lock in your selections. You can call these methods without arguments to use the results from your last “List” call. The `describe_groups` method is especially helpful for variable selection in programs with many variables, like the ACS.
 3.  **Get**: Call the `get_data()` method to build and execute all the necessary API calls. This method handles complex geographic requirements automatically and utilizes thread pooling for speed.
 4.  **Convert & Analyze**: Use the `to_polars()` or `to_pandas()` methods on the response object to get your data in a ready-to-use DataFrame format. The response object also includes a powerful `tabulate()` method for quick, Stata-like frequency tables.
 
@@ -105,22 +105,28 @@ Sets the active geographies for the session.
 -   **`values`** (`str` \| `list[str]`, optional): The geography values to set. If `None`, sets all geos from the last `list_geos()` call.
 -   **`by`** (`str`): The key to use for matching `values`. Must be either `'sumlev'` (default) or `'desc'`.
 
-### `list_groups(self, to_dicts=True, patterns=None, logic=all, match_in='label')`
+### `list_groups(self, to_dicts=True, patterns=None, logic=all, match_in='description')`
 
-Lists available variables for the currently set products.
+Lists available variable groups for the currently set products. Not all products have groups, in which case the resulting list will be empty.
 
--   **`to_dicts`** (`bool`): If `True` (default), returns a list of dictionaries with full variable details. If `False`, returns a list of unique variable names.
--   **`patterns`** (`str` \| `list[str]`, optional): Regex pattern(s) to search for within the variable metadata.
+-   **`to_dicts`** (`bool`): If `True` (default), returns a list of dictionaries with full group details. If `False`, returns a list of unique group names.
+-   **`patterns`** (`str` \| `list[str]`, optional): Regex pattern(s) to search for within the group metadata.
 -   **`logic`** (`callable`): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
--   **`match_in`** (`str`): The field to match patterns against. Can be `'label'` (default), `'name'` or `'concept'`.
+-   **`match_in`** (`str`): The field to match patterns against. Can be `'description'` (default) or `'name'`.
 
 ### `set_groups(self, names=None)`
 
-Sets the active variables for the session.
+Sets the active variable groups for the session.
 
--   **`names`** (`str` \| `list[str]`, optional): The name or list of names of the variables to set. If `None`, sets all variables from the last `list_variables()` call.
+-   **`names`** (`str` \| `list[str]`, optional): The name or list of names of the groups to set. If `None`, sets all groups from the last `list_groups()` call.
 
-### `list_variables(self, to_dicts=True, patterns=None, logic=all, match_in='label')`
+### `describe_groups(self, groups=None)`
+
+Print hierarchically-nested group descriptions to facilitate variable selection.
+
+-   **`groups`** (`str` \| `list[str]`, optional): The name or list of names of the groups to describe. If `None`, describes all set groups or reports an error with instructions to set groups or use the `groups` parameter.
+
+### `list_variables(self, to_dicts=True, patterns=None, logic=all, match_in='label', groups=None)`
 
 Lists available variables for the currently set products.
 
@@ -128,6 +134,7 @@ Lists available variables for the currently set products.
 -   **`patterns`** (`str` \| `list[str]`, optional): Regex pattern(s) to search for within the variable metadata.
 -   **`logic`** (`callable`): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
 -   **`match_in`** (`str`): The field to match patterns against. Can be `'label'` (default), `'name'` or `'concept'`.
+-   `groups`(`str` \| `list[str]`, optional): Variable groups within which the listing will be limited. Groups provided here override whatever groups may be set, and set groups will be used if this is `None`.
 
 ### `set_variables(self, names=None)`
 
@@ -135,7 +142,7 @@ Sets the active variables for the session.
 
 -   **`names`** (`str` \| `list[str]`, optional): The name or list of names of the variables to set. If `None`, sets all variables from the last `list_variables()` call.
 
-### `get_data(self, within='us', max_workers=100, timeout=30, preview_only=False, include_names=False)`
+### `get_data(self, within='us', max_workers=100, timeout=30, preview_only=False, include_names=False, include_geoids=False, include_attributes=False)`
 
 Executes the API calls based on the set parameters and retrieves the data.
 
@@ -146,7 +153,9 @@ Executes the API calls based on the set parameters and retrieves the data.
 -   **`max_workers`** (`int`, optional): The maximum number of concurrent threads to use for making API calls. For requests generating thousands of calls, it's wise to keep this value lower (e.g., `< 100`) to avoid server-side connection issues. Defaults to `100`.
 -   **`timeout`** (`int`, optional): Request timeout in seconds for each API call. Defaults to `30`.
 -   **`preview_only`** (`bool`, optional): If `True`, builds the list of API calls but does not execute them. Useful for debugging. Defaults to `False`.
--   **`include_names`** (`bool`, optional): If `True`, includes geography name (`NAME`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Defaults to `False`.
+-   **`include_names`** (`bool`, optional): If `True`, includes geography name (`NAME`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Note that attempted inclusion may result in query failure for some products (e.g., microdata). Defaults to `False`.
+-   **`include_geoids`** (`bool`, optional): If `True`, includes geography ID (`GEO_ID`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Note that attempted inclusion may result in query failure for some products (e.g., microdata). Defaults to `False`.
+-   **`include_attributes`** (`bool`, optional): If `True`, includes attributes associated with set variables (e.g., margins of error) in API request if available. Defaults to `False`.
 
 ------------------------------------------------------------------------
 
@@ -184,9 +193,7 @@ Generates and prints a frequency table.
 
 ------------------------------------------------------------------------
 
-# Usage Example: Stratified Tabulation
-
-This example demonstrates how to retrieve ACS PUMS data and then use the `tabulate` method to create a stratified frequency table.
+# Usage Examples
 
 ``` python
 import os
@@ -194,6 +201,8 @@ from cendat import CenDatHelper
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# --- ACS PUMS ANALYSIS ---
 
 # 1. Initialize and set up the query
 cdh = CenDatHelper(years=[2022], key=os.getenv("CENSUS_API_KEY"))
@@ -208,8 +217,6 @@ response = cdh.get_data(
 )
 
 # 3. Create a stratified tabulation
-# This shows the adult age distribution (AGEP) for each sex (SEX),
-# stratified by state (ST). The results are weighted by PWGTP.
 print("Age Distribution by Sex, Stratified by State")
 response.tabulate(
     "SEX", "AGEP",
@@ -219,9 +226,52 @@ response.tabulate(
 )
 
 # 4. Convert to DataFrame for further analysis
-# The `destring=True` argument allows Polars to infer the schema
-# for requested variables. It can also be controlled precisely via
-# `schema_overrides`.
 df = response.to_polars(concat=True, destring=True)
 print(df.head())
+
+# --- ACS 5YR AGGREGATE ANALYSIS ---
+
+cdh.list_products(years=[2023], patterns=r"acs/acs5\)")
+cdh.set_products()
+cdh.list_groups(patterns="sex by age")
+cdh.set_groups("B17001")
+cdh.describe_groups()
+cdh.set_variables(["B17001_001E", "B17001_002E"])
+cdh.set_geos(["160"])
+response = cdh.get_data(
+    include_names=True,
+    include_attributes=True,
+)
+df = response.to_polars(concat=True, destring=True)
+df.glimpse()
+
+# --- ACS 5YR AGGREGATE ANALYSIS ---
+
+cdh.list_products(years=[2023], patterns=r"/acs/acs5\)")
+cdh.set_products()
+cdh.set_variables("B01001_001E")  # total population
+cdh.set_geos("150")
+response = cdh.get_data()
+
+# how many counties
+response.tabulate("state", where="B01001_001E > 10_000")
+
+# how many people in those counties
+response.tabulate("state", weight_var="B01001_001E", where="B01001_001E > 10_000")
+
+# --- CPS MICRODATA ANALYSIS ---
+
+cdh.list_products(years=[2022, 2023], patterns="/cps/tobacco")
+cdh.set_products()
+cdh.list_groups()
+cdh.set_variables(["PEA1", "PEA3", "PWNRWGT"])
+cdh.set_geos("state", "desc")
+response = cdh.get_data(within={"state": ["06", "48"]})
+response.tabulate(
+    "PEA1",
+    "PEA3",
+    strat_by="state",
+    weight_var="PWNRWGT",
+    weight_div=3,
+)
 ```

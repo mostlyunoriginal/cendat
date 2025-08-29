@@ -49,7 +49,9 @@ def test_n_calls_counties():
     check_calls = confirm_src["counties"].height
 
     c.set_geos("050")
-    response = c.get_data(include_names=True, include_attributes=True)
+    response = c.get_data(
+        include_names=True, include_attributes=True, include_geoids=True
+    )
     n_rows = response.to_polars(concat=True).height
 
     assert c["n_calls"] == 1
@@ -66,7 +68,9 @@ def test_n_calls_county_subs():
     )
 
     c.set_geos("060")
-    response = c.get_data(include_names=True, include_attributes=True)
+    response = c.get_data(
+        include_names=True, include_attributes=True, include_geoids=True
+    )
     n_rows = response.to_polars(concat=True).height
 
     assert c["n_calls"] == 52
@@ -79,7 +83,9 @@ def test_n_calls_tracts():
     check_calls = confirm_src["tracts"].height
 
     c.set_geos("140")
-    response = c.get_data(include_names=True, include_attributes=True)
+    response = c.get_data(
+        include_names=True, include_attributes=True, include_geoids=True
+    )
     n_rows = response.to_pandas(concat=True).shape[0]
 
     assert c["n_calls"] == 52
@@ -111,7 +117,9 @@ def test_n_calls_places():
     )
 
     c.set_geos("160")
-    response = c.get_data(include_names=True, include_attributes=True)
+    response = c.get_data(
+        include_names=True, include_attributes=True, include_geoids=True
+    )
     n_rows = response.to_polars(concat=True).height
 
     assert c["n_calls"] == 1
@@ -130,7 +138,9 @@ def test_n_calls_places_by_county():
     )
 
     c.set_geos("159")
-    response = c.get_data(include_names=True, include_attributes=True)
+    response = c.get_data(
+        include_names=True, include_attributes=True, include_geoids=True, max_workers=50
+    )
     n_rows = response.to_polars(concat=True).height
 
     # there are three counties that don't contain places

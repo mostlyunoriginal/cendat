@@ -1525,6 +1525,7 @@ class CenDatHelper:
         timeout: int = 30,
         preview_only: bool = False,
         include_names: bool = False,
+        include_geoids: bool = False,
         include_attributes: bool = False,
     ) -> "CenDatResponse":
         """
@@ -1595,6 +1596,8 @@ class CenDatHelper:
                 continue
 
             vars_to_get = param["names"].copy()
+            if include_geoids:
+                vars_to_get.insert(0, "GEO_ID")
             if include_names:
                 vars_to_get.insert(0, "NAME")
             if include_attributes:
