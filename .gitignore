@@ -2,3 +2,4 @@
 .venv
 scratch*.py
 README_prior.md
+client.py

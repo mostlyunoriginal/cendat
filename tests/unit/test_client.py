@@ -4,7 +4,7 @@ import pytest
 import re
 from unittest.mock import patch, Mock
 
-from cendat.client import CenDatHelper, CenDatResponse
+from cendat import CenDatHelper, CenDatResponse
 
 # --- 1. Mock Data ---
 
@@ -190,7 +190,7 @@ def tabulation_response():
 
 
 @pytest.mark.unit
-@patch("cendat.client.requests.get")
+@patch("cendat.CenDatHelper.requests.get")
 def test_list_products_filters_unsupported_types(mock_get, cdh):
     mock_response = Mock()
     mock_response.json.return_value = SIMPLE_PRODUCTS_JSON
@@ -202,7 +202,7 @@ def test_list_products_filters_unsupported_types(mock_get, cdh):
 
 
 @pytest.mark.unit
-@patch("cendat.client.requests.get")
+@patch("cendat.CenDatHelper.requests.get")
 def test_list_variables_with_patterns_and_logic(mock_get, cdh):
     """Tests that the search and filter parameters work correctly."""
     mock_product_response = Mock()
@@ -229,8 +229,10 @@ def test_list_variables_with_patterns_and_logic(mock_get, cdh):
 
 
 @pytest.mark.unit
-@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
-@patch("cendat.client.CenDatHelper._get_json_from_url")  # Patch the internal helper
+@patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
+@patch(
+    "cendat.CenDatHelper.CenDatHelper._get_json_from_url"
+)  # Patch the internal helper
 def test_get_data_preview_only_skips_fetching(mock_get_json, mock_get_combos, cdh):
     """Tests that preview_only=True sets n_calls but does not fetch data."""
     # This test is specifically for the preview logic, so we don't need ThreadPoolExecutor
@@ -257,7 +259,7 @@ def test_get_data_preview_only_skips_fetching(mock_get_json, mock_get_combos, cd
 
 
 @pytest.mark.unit
-@patch("cendat.client.CenDatHelper._get_json_from_url")
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
 def test_get_data_handles_microdata_correctly(mock_get_json, cdh):
     """Tests that the microdata workflow constructs the correct API call."""
     # Mock the setup calls first
@@ -293,7 +295,7 @@ def test_get_data_handles_microdata_correctly(mock_get_json, cdh):
 
 
 @pytest.mark.unit
-@patch("cendat.client.requests.get")
+@patch("cendat.CenDatHelper.requests.get")
 def test_set_geos_requires_message(mock_get, cdh, capsys):
     mock_product_response = Mock()
     mock_product_response.json.return_value = {
@@ -325,8 +327,8 @@ def test_set_geos_requires_message(mock_get, cdh, capsys):
 
 
 @pytest.mark.unit
-@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
-@patch("cendat.client.CenDatHelper._get_json_from_url")
+@patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
 def test_get_data_expands_within_clauses_correctly(mock_get_json, mock_get_combos, cdh):
     mock_get_json.side_effect = [
         SIMPLE_PRODUCTS_JSON,
@@ -349,8 +351,8 @@ def test_get_data_expands_within_clauses_correctly(mock_get_json, mock_get_combo
 
 
 @pytest.mark.unit
-@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
-@patch("cendat.client.CenDatHelper._get_json_from_url")
+@patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
 def test_get_data_handles_complex_list_expansion(mock_get_json, mock_get_combos, cdh):
     mock_get_json.side_effect = [
         SIMPLE_PRODUCTS_JSON,
@@ -501,8 +503,8 @@ def test_tabulate_with_multiple_where_clauses_and_any_logic(
 
 
 @pytest.mark.unit
-@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
-@patch("cendat.client.requests.get")
+@patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.CenDatHelper.requests.get")
 def test_get_data_with_specific_target_geos(mock_get, mock_get_combos, cdh):
     """
     Tests that get_data bypasses the parent combination search when the
@@ -555,8 +557,8 @@ def test_get_data_with_specific_target_geos(mock_get, mock_get_combos, cdh):
 
 
 @pytest.mark.unit
-@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
-@patch("cendat.client.CenDatHelper._get_json_from_url")
+@patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
 def test_get_data_uses_wildcard_correctly(mock_get_json, mock_get_combos, cdh):
     """
     Tests that get_data correctly uses a wildcard for the most granular,
@@ -592,8 +594,8 @@ def test_get_data_uses_wildcard_correctly(mock_get_json, mock_get_combos, cdh):
 
 
 @pytest.mark.unit
-@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
-@patch("cendat.client.CenDatHelper._get_json_from_url")
+@patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
 def test_get_data_uses_wildcard_correctly2(mock_get_json, mock_get_combos, cdh):
     """
     Tests that get_data correctly uses a wildcard for the most granular,
@@ -632,8 +634,8 @@ def test_get_data_uses_wildcard_correctly2(mock_get_json, mock_get_combos, cdh):
 
 
 @pytest.mark.unit
-@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
-@patch("cendat.client.CenDatHelper._get_json_from_url")
+@patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
 def test_get_data_wildcard_with_us_scope(mock_get_json, mock_get_combos, cdh):
     """
     Tests the 'Everything' case: a granular geo with no 'within' clause,
@@ -674,8 +676,8 @@ def test_get_data_wildcard_with_us_scope(mock_get_json, mock_get_combos, cdh):
 
 
 @pytest.mark.unit
-@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
-@patch("cendat.client.CenDatHelper._get_json_from_url")
+@patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
 def test_get_data_no_requirements_bypasses_wildcard(
     mock_get_json, mock_get_combos, cdh
 ):
@@ -707,8 +709,8 @@ def test_get_data_no_requirements_bypasses_wildcard(
 
 
 @pytest.mark.unit
-@patch("cendat.client.CenDatHelper._get_parent_geo_combinations")
-@patch("cendat.client.CenDatHelper._get_json_from_url")
+@patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
 def test_get_data_single_requirement_uses_wildcard(mock_get_json, mock_get_combos, cdh):
     """
     Tests that a geo with a single requirement uses a wildcard for that
@@ -738,7 +740,7 @@ def test_get_data_single_requirement_uses_wildcard(mock_get_json, mock_get_combo
 
 
 @pytest.mark.unit
-@patch("cendat.client.CenDatHelper._get_json_from_url")
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
 def test_get_data_include_names_adds_name_to_api_call(mock_get_json, cdh):
     """
     Tests that get_data(include_names=True) correctly prepends 'NAME' to the
@@ -775,7 +777,7 @@ def test_get_data_include_names_adds_name_to_api_call(mock_get_json, cdh):
 
 
 @pytest.mark.unit
-@patch("cendat.client.requests.get")
+@patch("cendat.CenDatHelper.requests.get")
 def test_list_groups(mock_get, cdh):
     """Tests the list_groups method for correctness and filtering."""
     mock_product_response = Mock()
@@ -803,7 +805,7 @@ def test_list_groups(mock_get, cdh):
 
 
 @pytest.mark.unit
-@patch("cendat.client.requests.get")
+@patch("cendat.CenDatHelper.requests.get")
 def test_set_groups(mock_get, cdh):
     """Tests the set_groups method."""
     mock_product_response = Mock()
@@ -832,7 +834,7 @@ def test_set_groups(mock_get, cdh):
 
 
 @pytest.mark.unit
-@patch("cendat.client.requests.get")
+@patch("cendat.CenDatHelper.requests.get")
 def test_list_variables_with_group_filters(mock_get, cdh):
     """Tests the group filtering logic in list_variables."""
     mock_product_response = Mock()
@@ -873,7 +875,7 @@ def test_list_variables_with_group_filters(mock_get, cdh):
 
 
 @pytest.mark.unit
-@patch("cendat.client.requests.get")
+@patch("cendat.CenDatHelper.requests.get")
 def test_describe_groups(mock_get, cdh, capsys):
     """Tests the describe_groups method for correct formatting and output."""
     mock_product_response = Mock()
@@ -925,7 +927,7 @@ def test_describe_groups(mock_get, cdh, capsys):
     ],
     ids=["include_attributes=True", "include_attributes=False"],
 )
-@patch("cendat.client.requests.get")
+@patch("cendat.CenDatHelper.requests.get")
 def test_get_data_handles_include_attributes(
     mock_get, cdh, include_flag, expected_vars_set
 ):
@@ -970,7 +972,7 @@ def test_get_data_handles_include_attributes(
 
 
 @pytest.mark.unit
-@patch("cendat.client.requests.get")
+@patch("cendat.CenDatHelper.requests.get")
 def test_get_data_handles_names_and_attributes_together(mock_get, cdh):
     """
     Tests that `get_data` correctly includes both NAME and attribute
