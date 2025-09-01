@@ -823,6 +823,10 @@ class CenDatHelper:
 
         self.params = []  # Reset params
 
+        micro_indicators = {
+            p["url"]: p.get("is_microdata", False) for p in self.products
+        }
+
         # Case 1: Variables are set (standard behavior)
         if self.variables:
             for geo in self.geos:
@@ -848,6 +852,7 @@ class CenDatHelper:
                                 "types": var_group["types"],
                                 "attributes": var_group["attributes"],
                                 "url": geo["url"],
+                                "is_microdata": micro_indicators[geo["url"]],
                             }
                         )
 
@@ -881,6 +886,7 @@ class CenDatHelper:
                                     "name"
                                 ],  # Key to identify group call
                                 "url": geo["url"],
+                                "is_microdata": micro_indicators[geo["url"]],
                             }
                         )
 
@@ -1046,16 +1052,24 @@ class CenDatHelper:
             # Conditionally build the 'get' parameter string based on call type
             if "group_name" in param:  # This is a group-based call
                 vars_to_get = [f"group({param['group_name']})"]
-                if include_geoids:
+                if include_geoids and param["is_microdata"]:
+                    print("ℹ️ GEO_ID not valid for microdata - request ignored.")
+                elif include_geoids:
                     vars_to_get.insert(0, "GEO_ID")
-                if include_names:
+                if include_names and param["is_microdata"]:
+                    print("ℹ️ NAME not valid for microdata - request ignored.")
+                elif include_names:
                     vars_to_get.insert(0, "NAME")
-                # `include_attributes` is ignored for group calls, per user request.
-            else:  # This is a variable-based call (original logic)
+                # `include_attributes` is ignored for group calls.
+            else:
                 vars_to_get = param["names"].copy()
-                if include_geoids:
+                if include_geoids and param["is_microdata"]:
+                    print("ℹ️ GEO_ID not valid for microdata - request ignored.")
+                elif include_geoids:
                     vars_to_get.insert(0, "GEO_ID")
-                if include_names:
+                if include_names and param["is_microdata"]:
+                    print("ℹ️ NAME not valid for microdata - request ignored.")
+                elif include_names:
                     vars_to_get.insert(0, "NAME")
                 if include_attributes:
                     all_attributes = set()
