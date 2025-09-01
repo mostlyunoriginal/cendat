@@ -2,6 +2,7 @@ import re
 import requests
 import itertools
 import builtins
+from collections import defaultdict
 from typing import List, Union, Dict, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .CenDatResponse import CenDatResponse
@@ -851,7 +852,15 @@ class CenDatHelper:
                         )
 
         # Case 2: No variables, but exactly one group is set per vintage * geo
-        elif self.groups and len(self.groups) == len(self.geos):
+        elif self.groups:
+            mult_check = defaultdict(set)
+            for group in self.groups:
+                mult_check[group["url"]].update({group["name"]})
+            if [k for k, v in mult_check.items() if len(v) > 1]:
+                print(
+                    "❌ Error: You must set variables if any set product has more than 1 set group."
+                )
+                return
             for geo in self.geos:
                 for group in self.groups:
                     if (
