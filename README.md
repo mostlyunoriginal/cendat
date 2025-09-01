@@ -116,7 +116,7 @@ Lists available variable groups for the currently set products. Not all products
 
 ### `set_groups(self, names=None)`
 
-Sets the active variable groups for the session.
+Sets the active variable groups for the session. If the call to `set_groups` results in a single group for each product vintage and all group variables are wanted, `set_variables` may be skipped.
 
 -   **`names`** (`str` \| `list[str]`, optional): The name or list of names of the groups to set. If `None`, sets all groups from the last `list_groups()` call.
 
@@ -134,11 +134,11 @@ Lists available variables for the currently set products.
 -   **`patterns`** (`str` \| `list[str]`, optional): Regex pattern(s) to search for within the variable metadata.
 -   **`logic`** (`callable`): The logic to use when multiple patterns are provided. Can be `all` (default) or `any`.
 -   **`match_in`** (`str`): The field to match patterns against. Can be `'label'` (default), `'name'` or `'concept'`.
--   `groups`(`str` \| `list[str]`, optional): Variable groups within which the listing will be limited. Groups provided here override whatever groups may be set, and set groups will be used if this is `None`.
+-   **`groups`** (`str` \| `list[str]`, optional): Variable groups within which the listing will be limited. Groups provided here override whatever groups may be set, and set groups will be used if this is `None`.
 
 ### `set_variables(self, names=None)`
 
-Sets the active variables for the session.
+Sets the active variables for the session. If exactly one group is set for each product vintage and all group variables are wanted, `set_variables` may be skipped. Doing so allows for more than the standard API max of 50 variables.
 
 -   **`names`** (`str` \| `list[str]`, optional): The name or list of names of the variables to set. If `None`, sets all variables from the last `list_variables()` call.
 
@@ -153,8 +153,8 @@ Executes the API calls based on the set parameters and retrieves the data.
 -   **`max_workers`** (`int`, optional): The maximum number of concurrent threads to use for making API calls. For requests generating thousands of calls, it's wise to keep this value lower (e.g., `< 100`) to avoid server-side connection issues. Defaults to `100`.
 -   **`timeout`** (`int`, optional): Request timeout in seconds for each API call. Defaults to `30`.
 -   **`preview_only`** (`bool`, optional): If `True`, builds the list of API calls but does not execute them. Useful for debugging. Defaults to `False`.
--   **`include_names`** (`bool`, optional): If `True`, includes geography name (`NAME`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Note that attempted inclusion may result in query failure for some products (e.g., microdata). Defaults to `False`.
--   **`include_geoids`** (`bool`, optional): If `True`, includes geography ID (`GEO_ID`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Note that attempted inclusion may result in query failure for some products (e.g., microdata). Defaults to `False`.
+-   **`include_names`** (`bool`, optional): If `True`, includes geography name (`NAME`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Note that NAME requests for microdata products will be ignored (with a message). Defaults to `False`.
+-   **`include_geoids`** (`bool`, optional): If `True`, includes geography ID (`GEO_ID`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Note that GEO_ID requests for microdata products will be ignored (with a message). Defaults to `False`.
 -   **`include_attributes`** (`bool`, optional): If `True`, includes attributes associated with set variables (e.g., margins of error) in API request if available. Defaults to `False`.
 
 ------------------------------------------------------------------------
@@ -187,7 +187,7 @@ Generates and prints a frequency table.
 -   **`strat_by`** (`str`, optional): A column name to stratify the results by. Percentages and cumulative stats will be calculated within each stratum. Defaults to `None`.
 -   **`weight_var`** (`str`, optional): The name of the column to use for weighting. If `None`, each row has a weight of 1. Defaults to `None`.
 -   **`weight_div`** (`int`, optional): A positive integer to divide the weight by, useful for pooled tabulations across multiple product vintages. `weight_var` must be provided if this is used. Defaults to `None`.
--   **`where`** (`str` \| `list[str]`, optional): A string or list of strings representing conditions to filter the data before tabulation. Each condition should be in a format like `"variable operator value"` (e.g., `"AGE > 30"`). Defaults to `None`.
+-   **`where`** (`str` \| `list[str]`, optional): A string or list of strings representing conditions to filter the data before tabulation. Each condition should be in a format like `"variable operator value"` (e.g., `"AGE > 30"`) or `"variable1 / variable2 operator value"` (e.g., `"B17001_002E / B17001_001E < 0.01"`). Defaults to `None`.
 -   **`logic`** (`callable`): The function to apply when multiple `where` conditions are provided. Use `all` for AND logic (default) or `any` for OR logic.
 -   **`digits`** (`int`): The number of decimal places to display for floating-point numbers in the output table. Defaults to `1`.
 
@@ -231,6 +231,7 @@ print(df.head())
 
 # --- ACS 5YR AGGREGATE ANALYSIS ---
 
+cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
 cdh.list_products(years=[2023], patterns=r"acs/acs5\)")
 cdh.set_products()
 cdh.list_groups(patterns="sex by age")
@@ -247,6 +248,7 @@ df.glimpse()
 
 # --- ACS 5YR AGGREGATE ANALYSIS ---
 
+cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
 cdh.list_products(years=[2023], patterns=r"/acs/acs5\)")
 cdh.set_products()
 cdh.set_variables("B01001_001E")  # total population
@@ -261,6 +263,7 @@ response.tabulate("state", weight_var="B01001_001E", where="B01001_001E > 10_000
 
 # --- CPS MICRODATA ANALYSIS ---
 
+cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
 cdh.list_products(years=[2022, 2023], patterns="/cps/tobacco")
 cdh.set_products()
 cdh.list_groups()
@@ -274,4 +277,32 @@ response.tabulate(
     weight_var="PWNRWGT",
     weight_div=3,
 )
+
+# --- ACS ANALYSIS: see Colorado incorporated places with very low poverty across years ---
+
+cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
+cdh.list_products(years=[2020, 2021, 2022, 2023], patterns=r"acs/acs5\)")
+cdh.set_products()
+cdh.list_groups(patterns="sex by age")
+cdh.set_groups(["B17001"])
+cdh.describe_groups()
+cdh.set_geos(["160"])
+response = cdh.get_data(
+    include_names=True,
+    within={"state": "08"},
+)
+
+response.tabulate(
+    "NAME",
+    "B17001_002E",
+    "B17001_001E",
+    where=[
+        "B17001_001E > 1_000",
+        "B17001_002E / B17001_001E < 0.01",
+        "'CDP' not in NAME",
+    ],
+    weight_var="B17001_001E",
+    strat_by="vintage",
+)
+
 ```

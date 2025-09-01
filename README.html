@@ -195,7 +195,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="set_groupsself-namesnone" class="level3">
 <h3 class="anchored" data-anchor-id="set_groupsself-namesnone"><code>set_groups(self, names=None)</code></h3>
-<p>Sets the active variable groups for the session.</p>
+<p>Sets the active variable groups for the session. If the call to <code>set_groups</code> results in a single group for each product vintage and all group variables are wanted, <code>set_variables</code> may be skipped.</p>
 <ul>
 <li><strong><code>names</code></strong> (<code>str</code> | <code>list[str]</code>, optional): The name or list of names of the groups to set. If <code>None</code>, sets all groups from the last <code>list_groups()</code> call.</li>
 </ul>
@@ -215,12 +215,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong><code>patterns</code></strong> (<code>str</code> | <code>list[str]</code>, optional): Regex pattern(s) to search for within the variable metadata.</li>
 <li><strong><code>logic</code></strong> (<code>callable</code>): The logic to use when multiple patterns are provided. Can be <code>all</code> (default) or <code>any</code>.</li>
 <li><strong><code>match_in</code></strong> (<code>str</code>): The field to match patterns against. Can be <code>'label'</code> (default), <code>'name'</code> or <code>'concept'</code>.</li>
-<li><code>groups</code>(<code>str</code> | <code>list[str]</code>, optional): Variable groups within which the listing will be limited. Groups provided here override whatever groups may be set, and set groups will be used if this is <code>None</code>.</li>
+<li><strong><code>groups</code></strong> (<code>str</code> | <code>list[str]</code>, optional): Variable groups within which the listing will be limited. Groups provided here override whatever groups may be set, and set groups will be used if this is <code>None</code>.</li>
 </ul>
 </section>
 <section id="set_variablesself-namesnone" class="level3">
 <h3 class="anchored" data-anchor-id="set_variablesself-namesnone"><code>set_variables(self, names=None)</code></h3>
-<p>Sets the active variables for the session.</p>
+<p>Sets the active variables for the session. If exactly one group is set for each product vintage and all group variables are wanted, <code>set_variables</code> may be skipped. Doing so allows for more than the standard API max of 50 variables.</p>
 <ul>
 <li><strong><code>names</code></strong> (<code>str</code> | <code>list[str]</code>, optional): The name or list of names of the variables to set. If <code>None</code>, sets all variables from the last <code>list_variables()</code> call.</li>
 </ul>
@@ -238,8 +238,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong><code>max_workers</code></strong> (<code>int</code>, optional): The maximum number of concurrent threads to use for making API calls. For requests generating thousands of calls, it’s wise to keep this value lower (e.g., <code>&lt; 100</code>) to avoid server-side connection issues. Defaults to <code>100</code>.</li>
 <li><strong><code>timeout</code></strong> (<code>int</code>, optional): Request timeout in seconds for each API call. Defaults to <code>30</code>.</li>
 <li><strong><code>preview_only</code></strong> (<code>bool</code>, optional): If <code>True</code>, builds the list of API calls but does not execute them. Useful for debugging. Defaults to <code>False</code>.</li>
-<li><strong><code>include_names</code></strong> (<code>bool</code>, optional): If <code>True</code>, includes geography name (<code>NAME</code>) in API request–this variable is a special keyword understood by the data endpoint but is not included in <code>variables.json</code> and is therefore not discoverable through <code>list_variables()</code>. Note that attempted inclusion may result in query failure for some products (e.g., microdata). Defaults to <code>False</code>.</li>
-<li><strong><code>include_geoids</code></strong> (<code>bool</code>, optional): If <code>True</code>, includes geography ID (<code>GEO_ID</code>) in API request–this variable is a special keyword understood by the data endpoint but is not included in <code>variables.json</code> and is therefore not discoverable through <code>list_variables()</code>. Note that attempted inclusion may result in query failure for some products (e.g., microdata). Defaults to <code>False</code>.</li>
+<li><strong><code>include_names</code></strong> (<code>bool</code>, optional): If <code>True</code>, includes geography name (<code>NAME</code>) in API request–this variable is a special keyword understood by the data endpoint but is not included in <code>variables.json</code> and is therefore not discoverable through <code>list_variables()</code>. Note that NAME requests for microdata products will be ignored (with a message). Defaults to <code>False</code>.</li>
+<li><strong><code>include_geoids</code></strong> (<code>bool</code>, optional): If <code>True</code>, includes geography ID (<code>GEO_ID</code>) in API request–this variable is a special keyword understood by the data endpoint but is not included in <code>variables.json</code> and is therefore not discoverable through <code>list_variables()</code>. Note that GEO_ID requests for microdata products will be ignored (with a message). Defaults to <code>False</code>.</li>
 <li><strong><code>include_attributes</code></strong> (<code>bool</code>, optional): If <code>True</code>, includes attributes associated with set variables (e.g., margins of error) in API request if available. Defaults to <code>False</code>.</li>
 </ul>
 <hr>
@@ -274,7 +274,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong><code>strat_by</code></strong> (<code>str</code>, optional): A column name to stratify the results by. Percentages and cumulative stats will be calculated within each stratum. Defaults to <code>None</code>.</li>
 <li><strong><code>weight_var</code></strong> (<code>str</code>, optional): The name of the column to use for weighting. If <code>None</code>, each row has a weight of 1. Defaults to <code>None</code>.</li>
 <li><strong><code>weight_div</code></strong> (<code>int</code>, optional): A positive integer to divide the weight by, useful for pooled tabulations across multiple product vintages. <code>weight_var</code> must be provided if this is used. Defaults to <code>None</code>.</li>
-<li><strong><code>where</code></strong> (<code>str</code> | <code>list[str]</code>, optional): A string or list of strings representing conditions to filter the data before tabulation. Each condition should be in a format like <code>"variable operator value"</code> (e.g., <code>"AGE &gt; 30"</code>). Defaults to <code>None</code>.</li>
+<li><strong><code>where</code></strong> (<code>str</code> | <code>list[str]</code>, optional): A string or list of strings representing conditions to filter the data before tabulation. Each condition should be in a format like <code>"variable operator value"</code> (e.g., <code>"AGE &gt; 30"</code>) or <code>"variable1 / variable2 operator value"</code> (e.g., <code>"B17001_002E / B17001_001E &lt; 0.01"</code>). Defaults to <code>None</code>.</li>
 <li><strong><code>logic</code></strong> (<code>callable</code>): The function to apply when multiple <code>where</code> conditions are provided. Use <code>all</code> for AND logic (default) or <code>any</code> for OR logic.</li>
 <li><strong><code>digits</code></strong> (<code>int</code>): The number of decimal places to display for floating-point numbers in the output table. Defaults to <code>1</code>.</li>
 </ul>
@@ -319,49 +319,79 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb5-33"><a href="#cb5-33" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-34"><a href="#cb5-34" aria-hidden="true" tabindex="-1"></a><span class="co"># --- ACS 5YR AGGREGATE ANALYSIS ---</span></span>
 <span id="cb5-35"><a href="#cb5-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-36"><a href="#cb5-36" aria-hidden="true" tabindex="-1"></a>cdh.list_products(years<span class="op">=</span>[<span class="dv">2023</span>], patterns<span class="op">=</span><span class="vs">r"acs/acs5</span><span class="ch">\)</span><span class="vs">"</span>)</span>
-<span id="cb5-37"><a href="#cb5-37" aria-hidden="true" tabindex="-1"></a>cdh.set_products()</span>
-<span id="cb5-38"><a href="#cb5-38" aria-hidden="true" tabindex="-1"></a>cdh.list_groups(patterns<span class="op">=</span><span class="st">"sex by age"</span>)</span>
-<span id="cb5-39"><a href="#cb5-39" aria-hidden="true" tabindex="-1"></a>cdh.set_groups(<span class="st">"B17001"</span>)</span>
-<span id="cb5-40"><a href="#cb5-40" aria-hidden="true" tabindex="-1"></a>cdh.describe_groups()</span>
-<span id="cb5-41"><a href="#cb5-41" aria-hidden="true" tabindex="-1"></a>cdh.set_variables([<span class="st">"B17001_001E"</span>, <span class="st">"B17001_002E"</span>])</span>
-<span id="cb5-42"><a href="#cb5-42" aria-hidden="true" tabindex="-1"></a>cdh.set_geos([<span class="st">"160"</span>])</span>
-<span id="cb5-43"><a href="#cb5-43" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> cdh.get_data(</span>
-<span id="cb5-44"><a href="#cb5-44" aria-hidden="true" tabindex="-1"></a>    include_names<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb5-45"><a href="#cb5-45" aria-hidden="true" tabindex="-1"></a>    include_attributes<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb5-46"><a href="#cb5-46" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb5-47"><a href="#cb5-47" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> response.to_polars(concat<span class="op">=</span><span class="va">True</span>, destring<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb5-48"><a href="#cb5-48" aria-hidden="true" tabindex="-1"></a>df.glimpse()</span>
-<span id="cb5-49"><a href="#cb5-49" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-50"><a href="#cb5-50" aria-hidden="true" tabindex="-1"></a><span class="co"># --- ACS 5YR AGGREGATE ANALYSIS ---</span></span>
-<span id="cb5-51"><a href="#cb5-51" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-52"><a href="#cb5-52" aria-hidden="true" tabindex="-1"></a>cdh.list_products(years<span class="op">=</span>[<span class="dv">2023</span>], patterns<span class="op">=</span><span class="vs">r"/acs/acs5</span><span class="ch">\)</span><span class="vs">"</span>)</span>
-<span id="cb5-53"><a href="#cb5-53" aria-hidden="true" tabindex="-1"></a>cdh.set_products()</span>
-<span id="cb5-54"><a href="#cb5-54" aria-hidden="true" tabindex="-1"></a>cdh.set_variables(<span class="st">"B01001_001E"</span>)  <span class="co"># total population</span></span>
-<span id="cb5-55"><a href="#cb5-55" aria-hidden="true" tabindex="-1"></a>cdh.set_geos(<span class="st">"150"</span>)</span>
-<span id="cb5-56"><a href="#cb5-56" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> cdh.get_data()</span>
-<span id="cb5-57"><a href="#cb5-57" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-58"><a href="#cb5-58" aria-hidden="true" tabindex="-1"></a><span class="co"># how many counties</span></span>
-<span id="cb5-59"><a href="#cb5-59" aria-hidden="true" tabindex="-1"></a>response.tabulate(<span class="st">"state"</span>, where<span class="op">=</span><span class="st">"B01001_001E &gt; 10_000"</span>)</span>
-<span id="cb5-60"><a href="#cb5-60" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-61"><a href="#cb5-61" aria-hidden="true" tabindex="-1"></a><span class="co"># how many people in those counties</span></span>
-<span id="cb5-62"><a href="#cb5-62" aria-hidden="true" tabindex="-1"></a>response.tabulate(<span class="st">"state"</span>, weight_var<span class="op">=</span><span class="st">"B01001_001E"</span>, where<span class="op">=</span><span class="st">"B01001_001E &gt; 10_000"</span>)</span>
-<span id="cb5-63"><a href="#cb5-63" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-64"><a href="#cb5-64" aria-hidden="true" tabindex="-1"></a><span class="co"># --- CPS MICRODATA ANALYSIS ---</span></span>
+<span id="cb5-36"><a href="#cb5-36" aria-hidden="true" tabindex="-1"></a>cdh <span class="op">=</span> CenDatHelper(key<span class="op">=</span>os.getenv(<span class="st">"CENSUS_API_KEY"</span>))</span>
+<span id="cb5-37"><a href="#cb5-37" aria-hidden="true" tabindex="-1"></a>cdh.list_products(years<span class="op">=</span>[<span class="dv">2023</span>], patterns<span class="op">=</span><span class="vs">r"acs/acs5</span><span class="ch">\)</span><span class="vs">"</span>)</span>
+<span id="cb5-38"><a href="#cb5-38" aria-hidden="true" tabindex="-1"></a>cdh.set_products()</span>
+<span id="cb5-39"><a href="#cb5-39" aria-hidden="true" tabindex="-1"></a>cdh.list_groups(patterns<span class="op">=</span><span class="st">"sex by age"</span>)</span>
+<span id="cb5-40"><a href="#cb5-40" aria-hidden="true" tabindex="-1"></a>cdh.set_groups(<span class="st">"B17001"</span>)</span>
+<span id="cb5-41"><a href="#cb5-41" aria-hidden="true" tabindex="-1"></a>cdh.describe_groups()</span>
+<span id="cb5-42"><a href="#cb5-42" aria-hidden="true" tabindex="-1"></a>cdh.set_variables([<span class="st">"B17001_001E"</span>, <span class="st">"B17001_002E"</span>])</span>
+<span id="cb5-43"><a href="#cb5-43" aria-hidden="true" tabindex="-1"></a>cdh.set_geos([<span class="st">"160"</span>])</span>
+<span id="cb5-44"><a href="#cb5-44" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> cdh.get_data(</span>
+<span id="cb5-45"><a href="#cb5-45" aria-hidden="true" tabindex="-1"></a>    include_names<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb5-46"><a href="#cb5-46" aria-hidden="true" tabindex="-1"></a>    include_attributes<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb5-47"><a href="#cb5-47" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-48"><a href="#cb5-48" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> response.to_polars(concat<span class="op">=</span><span class="va">True</span>, destring<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb5-49"><a href="#cb5-49" aria-hidden="true" tabindex="-1"></a>df.glimpse()</span>
+<span id="cb5-50"><a href="#cb5-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-51"><a href="#cb5-51" aria-hidden="true" tabindex="-1"></a><span class="co"># --- ACS 5YR AGGREGATE ANALYSIS ---</span></span>
+<span id="cb5-52"><a href="#cb5-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-53"><a href="#cb5-53" aria-hidden="true" tabindex="-1"></a>cdh <span class="op">=</span> CenDatHelper(key<span class="op">=</span>os.getenv(<span class="st">"CENSUS_API_KEY"</span>))</span>
+<span id="cb5-54"><a href="#cb5-54" aria-hidden="true" tabindex="-1"></a>cdh.list_products(years<span class="op">=</span>[<span class="dv">2023</span>], patterns<span class="op">=</span><span class="vs">r"/acs/acs5</span><span class="ch">\)</span><span class="vs">"</span>)</span>
+<span id="cb5-55"><a href="#cb5-55" aria-hidden="true" tabindex="-1"></a>cdh.set_products()</span>
+<span id="cb5-56"><a href="#cb5-56" aria-hidden="true" tabindex="-1"></a>cdh.set_variables(<span class="st">"B01001_001E"</span>)  <span class="co"># total population</span></span>
+<span id="cb5-57"><a href="#cb5-57" aria-hidden="true" tabindex="-1"></a>cdh.set_geos(<span class="st">"150"</span>)</span>
+<span id="cb5-58"><a href="#cb5-58" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> cdh.get_data()</span>
+<span id="cb5-59"><a href="#cb5-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-60"><a href="#cb5-60" aria-hidden="true" tabindex="-1"></a><span class="co"># how many counties</span></span>
+<span id="cb5-61"><a href="#cb5-61" aria-hidden="true" tabindex="-1"></a>response.tabulate(<span class="st">"state"</span>, where<span class="op">=</span><span class="st">"B01001_001E &gt; 10_000"</span>)</span>
+<span id="cb5-62"><a href="#cb5-62" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-63"><a href="#cb5-63" aria-hidden="true" tabindex="-1"></a><span class="co"># how many people in those counties</span></span>
+<span id="cb5-64"><a href="#cb5-64" aria-hidden="true" tabindex="-1"></a>response.tabulate(<span class="st">"state"</span>, weight_var<span class="op">=</span><span class="st">"B01001_001E"</span>, where<span class="op">=</span><span class="st">"B01001_001E &gt; 10_000"</span>)</span>
 <span id="cb5-65"><a href="#cb5-65" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-66"><a href="#cb5-66" aria-hidden="true" tabindex="-1"></a>cdh.list_products(years<span class="op">=</span>[<span class="dv">2022</span>, <span class="dv">2023</span>], patterns<span class="op">=</span><span class="st">"/cps/tobacco"</span>)</span>
-<span id="cb5-67"><a href="#cb5-67" aria-hidden="true" tabindex="-1"></a>cdh.set_products()</span>
-<span id="cb5-68"><a href="#cb5-68" aria-hidden="true" tabindex="-1"></a>cdh.list_groups()</span>
-<span id="cb5-69"><a href="#cb5-69" aria-hidden="true" tabindex="-1"></a>cdh.set_variables([<span class="st">"PEA1"</span>, <span class="st">"PEA3"</span>, <span class="st">"PWNRWGT"</span>])</span>
-<span id="cb5-70"><a href="#cb5-70" aria-hidden="true" tabindex="-1"></a>cdh.set_geos(<span class="st">"state"</span>, <span class="st">"desc"</span>)</span>
-<span id="cb5-71"><a href="#cb5-71" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> cdh.get_data(within<span class="op">=</span>{<span class="st">"state"</span>: [<span class="st">"06"</span>, <span class="st">"48"</span>]})</span>
-<span id="cb5-72"><a href="#cb5-72" aria-hidden="true" tabindex="-1"></a>response.tabulate(</span>
-<span id="cb5-73"><a href="#cb5-73" aria-hidden="true" tabindex="-1"></a>    <span class="st">"PEA1"</span>,</span>
-<span id="cb5-74"><a href="#cb5-74" aria-hidden="true" tabindex="-1"></a>    <span class="st">"PEA3"</span>,</span>
-<span id="cb5-75"><a href="#cb5-75" aria-hidden="true" tabindex="-1"></a>    strat_by<span class="op">=</span><span class="st">"state"</span>,</span>
-<span id="cb5-76"><a href="#cb5-76" aria-hidden="true" tabindex="-1"></a>    weight_var<span class="op">=</span><span class="st">"PWNRWGT"</span>,</span>
-<span id="cb5-77"><a href="#cb5-77" aria-hidden="true" tabindex="-1"></a>    weight_div<span class="op">=</span><span class="dv">3</span>,</span>
-<span id="cb5-78"><a href="#cb5-78" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb5-66"><a href="#cb5-66" aria-hidden="true" tabindex="-1"></a><span class="co"># --- CPS MICRODATA ANALYSIS ---</span></span>
+<span id="cb5-67"><a href="#cb5-67" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-68"><a href="#cb5-68" aria-hidden="true" tabindex="-1"></a>cdh <span class="op">=</span> CenDatHelper(key<span class="op">=</span>os.getenv(<span class="st">"CENSUS_API_KEY"</span>))</span>
+<span id="cb5-69"><a href="#cb5-69" aria-hidden="true" tabindex="-1"></a>cdh.list_products(years<span class="op">=</span>[<span class="dv">2022</span>, <span class="dv">2023</span>], patterns<span class="op">=</span><span class="st">"/cps/tobacco"</span>)</span>
+<span id="cb5-70"><a href="#cb5-70" aria-hidden="true" tabindex="-1"></a>cdh.set_products()</span>
+<span id="cb5-71"><a href="#cb5-71" aria-hidden="true" tabindex="-1"></a>cdh.list_groups()</span>
+<span id="cb5-72"><a href="#cb5-72" aria-hidden="true" tabindex="-1"></a>cdh.set_variables([<span class="st">"PEA1"</span>, <span class="st">"PEA3"</span>, <span class="st">"PWNRWGT"</span>])</span>
+<span id="cb5-73"><a href="#cb5-73" aria-hidden="true" tabindex="-1"></a>cdh.set_geos(<span class="st">"state"</span>, <span class="st">"desc"</span>)</span>
+<span id="cb5-74"><a href="#cb5-74" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> cdh.get_data(within<span class="op">=</span>{<span class="st">"state"</span>: [<span class="st">"06"</span>, <span class="st">"48"</span>]})</span>
+<span id="cb5-75"><a href="#cb5-75" aria-hidden="true" tabindex="-1"></a>response.tabulate(</span>
+<span id="cb5-76"><a href="#cb5-76" aria-hidden="true" tabindex="-1"></a>    <span class="st">"PEA1"</span>,</span>
+<span id="cb5-77"><a href="#cb5-77" aria-hidden="true" tabindex="-1"></a>    <span class="st">"PEA3"</span>,</span>
+<span id="cb5-78"><a href="#cb5-78" aria-hidden="true" tabindex="-1"></a>    strat_by<span class="op">=</span><span class="st">"state"</span>,</span>
+<span id="cb5-79"><a href="#cb5-79" aria-hidden="true" tabindex="-1"></a>    weight_var<span class="op">=</span><span class="st">"PWNRWGT"</span>,</span>
+<span id="cb5-80"><a href="#cb5-80" aria-hidden="true" tabindex="-1"></a>    weight_div<span class="op">=</span><span class="dv">3</span>,</span>
+<span id="cb5-81"><a href="#cb5-81" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-82"><a href="#cb5-82" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-83"><a href="#cb5-83" aria-hidden="true" tabindex="-1"></a><span class="co"># --- ACS ANALYSIS: see Colorado incorporated places with very low poverty across years ---</span></span>
+<span id="cb5-84"><a href="#cb5-84" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-85"><a href="#cb5-85" aria-hidden="true" tabindex="-1"></a>cdh <span class="op">=</span> CenDatHelper(key<span class="op">=</span>os.getenv(<span class="st">"CENSUS_API_KEY"</span>))</span>
+<span id="cb5-86"><a href="#cb5-86" aria-hidden="true" tabindex="-1"></a>cdh.list_products(years<span class="op">=</span>[<span class="dv">2020</span>, <span class="dv">2021</span>, <span class="dv">2022</span>, <span class="dv">2023</span>], patterns<span class="op">=</span><span class="vs">r"acs/acs5</span><span class="ch">\)</span><span class="vs">"</span>)</span>
+<span id="cb5-87"><a href="#cb5-87" aria-hidden="true" tabindex="-1"></a>cdh.set_products()</span>
+<span id="cb5-88"><a href="#cb5-88" aria-hidden="true" tabindex="-1"></a>cdh.list_groups(patterns<span class="op">=</span><span class="st">"sex by age"</span>)</span>
+<span id="cb5-89"><a href="#cb5-89" aria-hidden="true" tabindex="-1"></a>cdh.set_groups([<span class="st">"B17001"</span>])</span>
+<span id="cb5-90"><a href="#cb5-90" aria-hidden="true" tabindex="-1"></a>cdh.describe_groups()</span>
+<span id="cb5-91"><a href="#cb5-91" aria-hidden="true" tabindex="-1"></a>cdh.set_geos([<span class="st">"160"</span>])</span>
+<span id="cb5-92"><a href="#cb5-92" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> cdh.get_data(</span>
+<span id="cb5-93"><a href="#cb5-93" aria-hidden="true" tabindex="-1"></a>    include_names<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb5-94"><a href="#cb5-94" aria-hidden="true" tabindex="-1"></a>    within<span class="op">=</span>{<span class="st">"state"</span>: <span class="st">"08"</span>},</span>
+<span id="cb5-95"><a href="#cb5-95" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-96"><a href="#cb5-96" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-97"><a href="#cb5-97" aria-hidden="true" tabindex="-1"></a>response.tabulate(</span>
+<span id="cb5-98"><a href="#cb5-98" aria-hidden="true" tabindex="-1"></a>    <span class="st">"NAME"</span>,</span>
+<span id="cb5-99"><a href="#cb5-99" aria-hidden="true" tabindex="-1"></a>    <span class="st">"B17001_002E"</span>,</span>
+<span id="cb5-100"><a href="#cb5-100" aria-hidden="true" tabindex="-1"></a>    <span class="st">"B17001_001E"</span>,</span>
+<span id="cb5-101"><a href="#cb5-101" aria-hidden="true" tabindex="-1"></a>    where<span class="op">=</span>[</span>
+<span id="cb5-102"><a href="#cb5-102" aria-hidden="true" tabindex="-1"></a>        <span class="st">"B17001_001E &gt; 1_000"</span>,</span>
+<span id="cb5-103"><a href="#cb5-103" aria-hidden="true" tabindex="-1"></a>        <span class="st">"B17001_002E / B17001_001E &lt; 0.01"</span>,</span>
+<span id="cb5-104"><a href="#cb5-104" aria-hidden="true" tabindex="-1"></a>        <span class="st">"'CDP' not in NAME"</span>,</span>
+<span id="cb5-105"><a href="#cb5-105" aria-hidden="true" tabindex="-1"></a>    ],</span>
+<span id="cb5-106"><a href="#cb5-106" aria-hidden="true" tabindex="-1"></a>    weight_var<span class="op">=</span><span class="st">"B17001_001E"</span>,</span>
+<span id="cb5-107"><a href="#cb5-107" aria-hidden="true" tabindex="-1"></a>    strat_by<span class="op">=</span><span class="st">"vintage"</span>,</span>
+<span id="cb5-108"><a href="#cb5-108" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
 
 </main>
