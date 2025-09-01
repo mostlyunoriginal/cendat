@@ -564,6 +564,7 @@ class CenDatHelper:
             return
 
         self.groups = groups_to_set
+        self.variables = []
         unique_names = sorted(list(set(g["name"] for g in self.groups)))
         print(f"✅ Groups set: {', '.join(unique_names)}")
 
