@@ -850,28 +850,30 @@ class CenDatHelper:
                             }
                         )
 
-        # Case 2: No variables, but exactly one group is set
-        elif len(self.groups) == 1:
-            group = self.groups[0]
+        # Case 2: No variables, but exactly one group is set per vintage * geo
+        elif self.groups and len(self.groups) == len(self.geos):
             for geo in self.geos:
-                if (
-                    geo["product"] == group["product"]
-                    and geo["vintage"] == group["vintage"]
-                    and geo["url"] == group["url"]
-                ):
-                    self.params.append(
-                        {
-                            "product": geo["product"],
-                            "vintage": geo["vintage"],
-                            "sumlev": geo["sumlev"],
-                            "desc": geo["desc"],
-                            "requires": geo.get("requires"),
-                            "wildcard": geo.get("wildcard"),
-                            "optionalWithWCFor": geo.get("optionalWithWCFor"),
-                            "group_name": group["name"],  # Key to identify group call
-                            "url": geo["url"],
-                        }
-                    )
+                for group in self.groups:
+                    if (
+                        geo["product"] == group["product"]
+                        and geo["vintage"] == group["vintage"]
+                        and geo["url"] == group["url"]
+                    ):
+                        self.params.append(
+                            {
+                                "product": geo["product"],
+                                "vintage": geo["vintage"],
+                                "sumlev": geo["sumlev"],
+                                "desc": geo["desc"],
+                                "requires": geo.get("requires"),
+                                "wildcard": geo.get("wildcard"),
+                                "optionalWithWCFor": geo.get("optionalWithWCFor"),
+                                "group_name": group[
+                                    "name"
+                                ],  # Key to identify group call
+                                "url": geo["url"],
+                            }
+                        )
 
         # Case 3: Invalid state
         else:

@@ -67,33 +67,54 @@ class CenDatResponse:
             # FIX: Add re.escape() to handle column names with special regex characters.
             all_columns_pattern = "|".join(re.escape(col) for col in self.all_columns)
 
+        sorted_operators = sorted(self.ALLOWED_OPERATORS, key=len, reverse=True)
+        operators_pattern = "|".join(re.escape(op) for op in sorted_operators)
+
         patternL = re.compile(
             r"^\s*("
             + all_columns_pattern
             + r")\s*("
-            + "|".join(re.escape(op) for op in self.ALLOWED_OPERATORS)
-            + r")\s*(.+)\s*$"
+            + operators_pattern
+            + r")\s*(.+?)\s*$"
         )
         patternR = re.compile(
-            r"^\s*(.+)\s*("
-            + "|".join(re.escape(op) for op in self.ALLOWED_OPERATORS)
+            r"^\s*(.+?)\s*("
+            + operators_pattern
             + r")\s*("
             + all_columns_pattern
             + r")\s*$"
         )
+        patternFrac = re.compile(
+            r"^\s*(("
+            + all_columns_pattern
+            + r")\s*/\s*("
+            + all_columns_pattern
+            + r"))\s*("
+            + operators_pattern
+            + r")\s*(.+?)\s*$"
+        )
         matchL = patternL.match(condition_string)
         matchR = patternR.match(condition_string)
+        matchFrac = patternFrac.match(condition_string)
 
-        if not (matchL or matchR):
+        if not (matchL or matchR or matchFrac):
             raise ValueError(f"Invalid condition format: '{condition_string}'")
 
         if matchL:
             variable, op_string, value_string = matchL.groups()
-        else:
+        elif matchR:
             value_string, op_string, variable = matchR.groups()
+        else:
+            discard, numerator, denominator, op_string, value_string = (
+                matchFrac.groups()
+            )
 
-        if variable not in self.all_columns:
+        if (matchL or matchR) and variable not in self.all_columns:
             raise ValueError(f"Invalid column name: '{variable}'")
+        elif matchFrac and numerator not in self.all_columns:
+            raise ValueError(f"Invalid column name: '{numerator}'")
+        elif matchFrac and denominator not in self.all_columns:
+            raise ValueError(f"Invalid column name: '{denominator}'")
 
         op_func = self.OPERATOR_MAP[op_string]
 
@@ -102,9 +123,17 @@ class CenDatResponse:
         except (ValueError, SyntaxError):
             raise ValueError(f"Invalid value format: '{value_string}'")
 
-        return lambda row: (
-            op_func(row[variable], value) if matchL else op_func(value, row[variable])
-        )
+        if matchL:
+            return lambda row: (op_func(row[variable], value))
+        elif matchR:
+            return lambda row: (op_func(value, row[variable]))
+        else:
+            # Safely handle division by zero. If the denominator is 0, the condition is False.
+            return lambda row: (
+                op_func(row[numerator] / row[denominator], value)
+                if row[denominator] != 0
+                else False
+            )
 
     def _prepare_dataframe_data(self, destring: bool, _data: Optional[List[Dict]]):
         """
@@ -214,7 +243,7 @@ class CenDatResponse:
             df = df.with_columns(
                 [
                     pl.lit(item["product"]).alias("product"),
-                    pl.lit(item["vintage"][0]).alias("vintage"),
+                    pl.lit(item["vintage"][0]).cast(str).alias("vintage"),
                     pl.lit(item["sumlev"]).alias("sumlev"),
                     pl.lit(item["desc"]).alias("desc"),
                 ]
@@ -278,6 +307,7 @@ class CenDatResponse:
             # Add context columns
             df["product"] = item["product"]
             df["vintage"] = item["vintage"][0]
+            df["vintage"] = df["vintage"].astype("string")
             df["sumlev"] = item["sumlev"]
             df["desc"] = item["desc"]
             dataframes.append(df)
