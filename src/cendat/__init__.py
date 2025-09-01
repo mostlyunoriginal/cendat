@@ -1,2 +1,3 @@
 # In src/cendat/__init__.py
-from .client import CenDatHelper, CenDatResponse
+from .CenDatResponse import CenDatResponse
+from .CenDatHelper import CenDatHelper

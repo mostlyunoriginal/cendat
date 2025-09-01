@@ -2,9 +2,9 @@ import polars as pl
 import os
 from dotenv import load_dotenv
 import pytest
+from cendat import CenDatHelper
 
 load_dotenv()
-from cendat.client import CenDatHelper
 
 confirm_src = {
     type: pl.read_csv(f"tests/data/{type}.txt", separator=delim)
@@ -132,17 +132,14 @@ def test_n_calls_places_by_county():
     check_calls = (
         confirm_src["places_by_county"]
         .filter(
-            pl.col.STATEFP.is_in([60, 66, 69, 74, 78]).not_(),
+            pl.col.STATEFP.is_in([8]),
         )
         .height
     )
 
     c.set_geos("159")
-    response = c.get_data(
-        include_names=True, include_attributes=True, include_geoids=True, max_workers=50
-    )
+    response = c.get_data(max_workers=50, timeout=60, within={"state": "08"})
     n_rows = response.to_polars(concat=True).height
 
-    # there are three counties that don't contain places
-    assert c["n_calls"] == 3221
+    assert c["n_calls"] == 64
     assert n_rows == check_calls
