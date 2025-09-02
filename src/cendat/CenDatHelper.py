@@ -3,8 +3,8 @@ import requests
 import itertools
 import builtins
 from collections import defaultdict
-from typing import List, Union, Dict, Optional, Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Union, Tuple, Dict, Optional, Callable
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from .CenDatResponse import CenDatResponse
 
 
@@ -1025,6 +1025,108 @@ class CenDatHelper:
                 all_combinations.extend(future.result())
         return all_combinations
 
+    def _get_gdf_from_url(
+        self,
+        layer_id: int,
+        where_clause: str,
+        service: str = "TIGERweb/tigerWMS_Current",
+        timeout: int = None,
+        offset: int = None,
+        n_records: int = None,
+    ) -> "gpd.GeoDataFrame":
+        """
+        Fetches geographic polygons from the US Census TIGERweb REST API.
+
+        Args:
+            layer_id (int): The numeric ID for the desired geography layer.
+            where_clause (str): An SQL-like clause to filter the geographies.
+            fields (str): A comma-separated string of field names to return.
+            service (str): The name of the TIGERweb map service to query.
+        """
+
+        import geopandas as gpd
+
+        API_URL = f"https://tigerweb.geo.census.gov/arcgis/rest/services/{service}/MapServer/{layer_id}/query"
+
+        params = {
+            "where": where_clause,
+            "outFields": "GEOID,NAME",
+            "outSR": "4326",
+            "f": "geojson",
+            "returnGeometry": "true",
+            "returnCountOnly": "false",
+            "resultOffset": offset,
+            "resultRecordCount": n_records,
+            "timeout": timeout,
+        }
+
+        try:
+            response = requests.get(API_URL, params=params)
+            response.raise_for_status()
+            gdf = gpd.GeoDataFrame.from_features(response.json()["features"])
+            return gdf
+
+        except requests.exceptions.RequestException as e:
+            print(f"❌ HTTP Request failed: {e}")
+        except (KeyError, ValueError) as e:
+            print(f"❌ Failed to parse response JSON: {e}")
+            print(f"   Server Response: {response.text[:200]}...")
+
+        return gpd.GeoDataFrame()
+
+    def _data_fetching(
+        self,
+        tasks: List[Tuple[str, Dict, Dict]] = None,
+        max_workers: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ):
+        """Takes data API tasks and runs them in a thread pool."""
+
+        results_aggregator = {
+            i: {"schema": None, "data": []} for i in range(len(self.params))
+        }
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_context = {
+                executor.submit(self._get_json_from_url, url, params, timeout): context
+                for url, params, context in tasks
+            }
+            for future in as_completed(future_to_context):
+                # As each call completes, aggregate its results.
+                context = future_to_context[future]
+                param_index = context["param_index"]
+                try:
+                    data = future.result()
+                    if data and len(data) > 1:
+                        if results_aggregator[param_index]["schema"] is None:
+                            results_aggregator[param_index]["schema"] = data[0]
+                        results_aggregator[param_index]["data"].extend(data[1:])
+                except Exception as exc:
+                    print(f"❌ Task for {context} generated an exception: {exc}")
+
+        # Attach the aggregated data back to the original parameter dictionaries.
+        for i, param in enumerate(self.params):
+            aggregated_result = results_aggregator[i]
+            param["schema"] = aggregated_result["schema"]
+            param["data"] = aggregated_result["data"]
+
+    def _geometry_fetching(
+        self,
+        tasks: List[Tuple[str, Dict, Dict]] = None,
+        max_workers: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ):
+        """
+        Takes TIGERweb tasks and runs them in a thread pool.
+
+        This method should be recursive like _get_parent_geo_combinations except the
+        recursion will be for paginated REST calls. The base case will be if there are
+        no more geometries to fetch (i.e., result of returnCountOnly=true minus number
+        of geometries fetched so far is zero).
+        """
+
+
+
     def get_data(
         self,
         within: Union[str, Dict, List[Dict]] = "us",
@@ -1034,6 +1136,7 @@ class CenDatHelper:
         include_names: bool = False,
         include_geoids: bool = False,
         include_attributes: bool = False,
+        include_geometry: bool = False,
     ) -> "CenDatResponse":
         """
         Retrieves data from the Census API based on the set parameters.
@@ -1074,10 +1177,8 @@ class CenDatHelper:
             )
             return CenDatResponse([])
 
-        results_aggregator = {
-            i: {"schema": None, "data": []} for i in range(len(self.params))
-        }
-        all_tasks = []
+        data_tasks = []
+        geo_tasks = []
 
         raw_within_clauses = within if isinstance(within, list) else [within]
 
@@ -1190,7 +1291,7 @@ class CenDatHelper:
                         api_params["in"] = " ".join(
                             [f"{k}:{v}" for k, v in within_copy.items()]
                         )
-                    all_tasks.append((vintage_url, api_params, context))
+                    data_tasks.append((vintage_url, api_params, context))
 
                 # --- Aggregate Data Path ---
                 # This path is more complex as it needs to handle geographic hierarchies.
@@ -1224,7 +1325,7 @@ class CenDatHelper:
                             api_params["in"] = " ".join(
                                 [f"{k}:{v}" for k, v in provided_parent_geos.items()]
                             )
-                        all_tasks.append((vintage_url, api_params, context))
+                        data_tasks.append((vintage_url, api_params, context))
                         continue
 
                     # Case B: Target geography is not specified. We need to figure out
@@ -1289,52 +1390,51 @@ class CenDatHelper:
                             api_params["in"] = " ".join(
                                 [f"{k}:{v}" for k, v in call_in_clause.items()]
                             )
-                        all_tasks.append((vintage_url, api_params, context))
+                        data_tasks.append((vintage_url, api_params, context))
 
-        if not all_tasks:
+        if not data_tasks:
             print("❌ Error: Could not determine any API calls to make.")
             return CenDatResponse([])
 
-        self.n_calls = len(all_tasks)
+        self.n_calls = len(data_tasks)
 
         # If in preview mode, print the first few planned calls and exit.
         if preview_only:
             print(f"ℹ️ Preview: this will yield {self.n_calls} API call(s).")
-            for i, (url, params, _) in enumerate(all_tasks[:5]):
+            for i, (url, params, _) in enumerate(data_tasks[:5]):
                 print(
                     f"  - Call {i+1}: {url}?get={params.get('get')}&for={params.get('for')}&in={params.get('in','')}"
                 )
-            if len(all_tasks) > 5:
-                print(f"  ... and {len(all_tasks) - 5} more.")
+            if len(data_tasks) > 5:
+                print(f"  ... and {len(data_tasks) - 5} more.")
             return CenDatResponse([])
 
         else:
             print(f"ℹ️ Making {self.n_calls} API call(s)...")
             # Execute all API calls concurrently.
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_context = {
-                    executor.submit(
-                        self._get_json_from_url, url, params, timeout
-                    ): context
-                    for url, params, context in all_tasks
-                }
-                for future in as_completed(future_to_context):
-                    # As each call completes, aggregate its results.
-                    context = future_to_context[future]
-                    param_index = context["param_index"]
+            with ProcessPoolExecutor(max_workers=2) as process_executor:
+                # Submit the two master jobs
+                data_future = process_executor.submit(
+                    self._data_fetching, data_tasks, self.timeout, self.max_workers
+                )
+                geo_future = process_executor.submit(
+                    self._geometry_fetching, geo_tasks, self.timeout, self.max_workers
+                )
+
+                # Important: Store which future is which
+                futures = {data_future: "data", geo_future: "geo"}
+
+                for future in as_completed(futures):
+                    result_type = futures[future]
                     try:
-                        data = future.result()
-                        if data and len(data) > 1:
-                            if results_aggregator[param_index]["schema"] is None:
-                                results_aggregator[param_index]["schema"] = data[0]
-                            results_aggregator[param_index]["data"].extend(data[1:])
+                        if result_type == "data":
+                            tabular_data = future.result()
+                        elif result_type == "geo":
+                            geometries_gdf = future.result()
                     except Exception as exc:
-                        print(f"❌ Task for {context} generated an exception: {exc}")
+                        print(f"❌ A master {result_type} task failed: {exc}")
 
-            # Attach the aggregated data back to the original parameter dictionaries.
-            for i, param in enumerate(self.params):
-                aggregated_result = results_aggregator[i]
-                param["schema"] = aggregated_result["schema"]
-                param["data"] = aggregated_result["data"]
+            if tabular_data is None or geometries_gdf is None or geometries_gdf.empty:
+                print("❌ Failed to retrieve both data and geometries. Cannot merge.")
 
-            return CenDatResponse(self.params)
+                return CenDatResponse(self.params)
