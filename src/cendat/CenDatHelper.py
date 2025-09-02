@@ -146,6 +146,9 @@ class CenDatHelper:
             response = requests.get(url, params=params, timeout=timeout)
             response.raise_for_status()
             return response.json()
+        # The Census API can return a 200 OK with an error message in the body
+        # that is not valid JSON. This is common when a requested geography
+        # does not exist within a parent geography (e.g., a tract in the wrong county).
         except requests.exceptions.JSONDecodeError as e:
             print(f"❌ Failed to decode JSON from {url}. Server response: {e}")
             params_minus = {key: value for key, value in params.items() if key != "key"}
@@ -170,6 +173,9 @@ class CenDatHelper:
 
     def _parse_vintage(self, vintage_input: Union[str, int]) -> List[int]:
         """
+        Internal helper to parse a vintage value, which can be a single year
+        (e.g., 2022) or a multi-year range (e.g., "2018-2022").
+
         Robustly parses a vintage value which can be a single year or a range.
 
         Args:
@@ -220,6 +226,8 @@ class CenDatHelper:
         Returns:
             A list of product dictionaries or a list of product titles.
         """
+        # Strategy: Fetch all products from the main data.json endpoint once and cache them.
+        # Subsequent calls will use the cache and apply filters.
         if not self._products_cache:
             data = self._get_json_from_url("https://api.census.gov/data.json")
             if not data or "dataset" not in data:
@@ -228,6 +236,7 @@ class CenDatHelper:
             for d in data["dataset"]:
                 is_micro = str(d.get("c_isMicrodata", "false")).lower() == "true"
                 is_agg = str(d.get("c_isAggregate", "false")).lower() == "true"
+                # We only support aggregate and microdata products, not timeseries or other types.
                 if not is_micro and not is_agg:
                     continue
 
@@ -248,6 +257,8 @@ class CenDatHelper:
                 elif isinstance(c_dataset_val, str):
                     dataset_type = c_dataset_val
 
+                # Create a more descriptive and unique title by appending the API path fragment.
+                # This helps distinguish between similarly named products (e.g., ACS1 vs ACS5).
                 title = d.get("title")
                 title = (
                     f"{title} ({re.sub(r'http://api.census.gov/data/','', access_url)})"
@@ -266,6 +277,7 @@ class CenDatHelper:
                 )
             self._products_cache = products
 
+        # Apply filters based on the provided arguments or the object's state.
         target_years = self.years
         if years is not None:
             target_years = [years] if isinstance(years, int) else list(years)
@@ -357,6 +369,8 @@ class CenDatHelper:
         Returns:
             A list of geography dictionaries or a list of summary level strings.
         """
+        # Strategy: Iterate through each set product, fetch its specific geography.json,
+        # and aggregate all available geographies into a single flat list.
         if not self.products:
             print("❌ Error: Products must be set first via `set_products()`.")
             return []
@@ -370,7 +384,8 @@ class CenDatHelper:
                 sumlev = geo_info.get("geoLevelDisplay")
                 if not sumlev:
                     continue
-                # NUANCED WILDCARD LOGIC: Capture wildcard metadata
+                # Capture all relevant metadata for each geography, including the keys
+                # needed to determine API call structure (requires, wildcard, etc.).
                 flat_geo_list.append(
                     {
                         "sumlev": sumlev,
@@ -437,6 +452,8 @@ class CenDatHelper:
             print("❌ Error: No valid geographies were found to set.")
             return
 
+        # Microdata products have a constraint: you can only query for one type of
+        # geography at a time (e.g., PUMAs within states).
         is_microdata_present = any(
             p.get("is_microdata")
             for p in self.products
@@ -451,6 +468,8 @@ class CenDatHelper:
             return
 
         self.geos = geos_to_set
+        # Create a user-friendly message summarizing the requirements for the set geos.
+        # This helps the user know what to provide in the `get_data` `within` clause.
         messages = {}
         for geo in self.geos:
             desc = geo["desc"]
@@ -493,6 +512,8 @@ class CenDatHelper:
         Returns:
             A list of group dictionaries or a list of group name strings.
         """
+        # Strategy: Similar to list_geos, iterate through each set product,
+        # fetch its groups.json, and aggregate the results.
         if not self.products:
             print("❌ Error: Products must be set first via `set_products()`.")
             return []
@@ -603,6 +624,8 @@ class CenDatHelper:
         if isinstance(groups_to_filter, str):
             groups_to_filter = [groups_to_filter]
 
+        # A set is used for efficient lookup of whether a variable's group
+        # is in the list of groups to be described.
         group_set = set(groups_to_filter)
 
         # Fetch all variables and group descriptions
@@ -638,6 +661,7 @@ class CenDatHelper:
                 group_desc = group_descriptions.get(
                     group_name, "No description available."
                 )
+                # Print a header for each new group.
                 print(f"\n--- Group: {group_name} ({group_desc}) ---")
                 last_group_printed = group_name
 
@@ -648,7 +672,8 @@ class CenDatHelper:
             for var in sorted_vars:
                 label = var.get("label", "")
 
-                # Use the count of '!!' as a reliable depth indicator
+                # The Census API uses "!!" in variable labels to denote hierarchy.
+                # We can use the count of this delimiter to determine indentation depth.
                 depth = label.count("!!")
                 indent = "  " * depth
 
@@ -685,6 +710,8 @@ class CenDatHelper:
         Returns:
             A list of variable dictionaries or a list of variable name strings.
         """
+        # Strategy: Iterate through each set product, fetch its variables.json,
+        # and aggregate all available variables into a single flat list.
         if not self.products:
             print("❌ Error: Products must be set first via `set_products()`.")
             return []
@@ -695,6 +722,7 @@ class CenDatHelper:
             if not data or "variables" not in data:
                 continue
             for name, details in data["variables"].items():
+                # Exclude reserved names used by the API for query parameters.
                 if name in ["GEO_ID", "for", "in", "ucgid"]:
                     continue
                 flat_variable_list.append(
@@ -781,6 +809,9 @@ class CenDatHelper:
         if not vars_to_set:
             print("❌ Error: No valid variables were found to set.")
             return
+        # Collapse the list of variables by product and vintage. This is a crucial
+        # step to group all variables that can be requested in a single API call,
+        # as each call is specific to one product/vintage.
         collapsed_vars = {}
         for var_info in vars_to_set:
             key = (var_info["product"], tuple(var_info["vintage"]), var_info["url"])
@@ -816,6 +847,13 @@ class CenDatHelper:
         This method joins the user-selected geographies with either selected
         variables or a single selected group, based on matching product and vintage.
         This creates the final parameter sets for `get_data`.
+
+        The logic handles two main scenarios:
+        1. The user has explicitly set variables via `set_variables()`.
+        2. The user has set groups via `set_groups()` and expects the library to
+           fetch all variables within those groups. This is only valid if exactly
+           one group is specified per product/vintage combination.
+        This creates the final parameter sets for `get_data`.
         """
         if not self.geos:
             print("❌ Error: Geographies must be set before creating parameters.")
@@ -836,7 +874,8 @@ class CenDatHelper:
                         and geo["vintage"] == var_group["vintage"]
                         and geo["url"] == var_group["url"]
                     ):
-                        # NUANCED WILDCARD LOGIC: Pass wildcard metadata into params
+                        # Combine the geography and variable information into a single
+                        # parameter dictionary.
                         self.params.append(
                             {
                                 "product": geo["product"],
@@ -858,14 +897,20 @@ class CenDatHelper:
 
         # Case 2: No variables, but exactly one group is set per vintage * geo
         elif self.groups:
-            mult_check = defaultdict(set)
+            # First, verify that exactly one group is set for each product URL.
+            # The Census API's `group()` parameter can only handle one group at a time.
+            groups_by_url = defaultdict(set)
             for group in self.groups:
-                mult_check[group["url"]].update({group["name"]})
-            if [k for k, v in mult_check.items() if len(v) > 1]:
+                groups_by_url[group["url"]].add(group["name"])
+
+            # Check if any product/vintage has more than one group selected.
+            # This is invalid because we can only request one 'group()' per API call.
+            if any(len(names) > 1 for names in groups_by_url.values()):
                 print(
                     "❌ Error: You must set variables if any set product has more than 1 set group."
                 )
                 return
+
             for geo in self.geos:
                 for group in self.groups:
                     if (
@@ -931,6 +976,12 @@ class CenDatHelper:
         Returns:
             List[Dict]: A list of dictionaries, where each dict is a valid
                         `in` clause for a data request.
+
+        Strategy: This is a recursive function.
+        - Base Case: If there are no more required geographies to fetch, return the
+          `in` clause that has been built up so far.
+        - Recursive Step: Fetch all FIPS codes for the current level of geography.
+          Then, for each FIPS code, make a recursive call to fetch the next level down.
         """
         if not required_geos:
             return [current_in_clause]
@@ -956,6 +1007,8 @@ class CenDatHelper:
             )
             return []
         all_combinations = []
+        # Use a ThreadPoolExecutor to fetch combinations for the next level in parallel,
+        # significantly speeding up discovery for deep geographic hierarchies.
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_fips = {
                 executor.submit(
@@ -1004,6 +1057,14 @@ class CenDatHelper:
         Returns:
             CenDatResponse: An object containing the aggregated data from all
                             successful API calls.
+
+        High-level Strategy:
+        1. Generate parameter sets by combining set products, geos, and variables/groups.
+        2. For each parameter set, determine the necessary API calls based on the `within` clause.
+        3. This involves handling microdata vs. aggregate data, and for aggregate data, determining if parent geography discovery or wildcards are needed.
+        4. Build a list of all API call tasks (URL + parameters).
+        5. If not in preview mode, execute all tasks concurrently using a thread pool.
+        6. Aggregate the results and return them in a `CenDatResponse` object.
         """
         self._create_params()
 
@@ -1020,9 +1081,12 @@ class CenDatHelper:
 
         raw_within_clauses = within if isinstance(within, list) else [within]
 
+        # Expand the `within` clauses. If a user provides a list of codes for a
+        # geography (e.g., `{'state': '08', 'county': ['001', '005']}`), this
+        # logic expands it into separate clauses for each combination.
         expanded_within_clauses = []
         for clause in raw_within_clauses:
-            # NUANCED WILDCARD LOGIC: Use builtins.dict to prevent shadowing errors
+            # Use builtins.dict to prevent shadowing errors with local variables
             if not isinstance(clause, builtins.dict):
                 expanded_within_clauses.append(clause)
                 continue
@@ -1042,6 +1106,8 @@ class CenDatHelper:
                 new_clause.update(builtins.dict(zip(keys, v_combination)))
                 expanded_within_clauses.append(new_clause)
 
+        # Iterate through each parameter set (a unique product/vintage/geo combination)
+        # and each `within` clause to build the full list of API calls.
         for i, param in enumerate(self.params):
             product_info = next(
                 (p for p in self.products if p["title"] == param["product"]), None
@@ -1050,7 +1116,7 @@ class CenDatHelper:
                 continue
 
             # Conditionally build the 'get' parameter string based on call type
-            if "group_name" in param:  # This is a group-based call
+            if "group_name" in param:  # This is a group-based call, not variable-based
                 vars_to_get = [f"group({param['group_name']})"]
                 if include_geoids and param["is_microdata"]:
                     print("ℹ️ GEO_ID not valid for microdata - request ignored.")
@@ -1060,7 +1126,7 @@ class CenDatHelper:
                     print("ℹ️ NAME not valid for microdata - request ignored.")
                 elif include_names:
                     vars_to_get.insert(0, "NAME")
-                # `include_attributes` is ignored for group calls.
+                # `include_attributes` is ignored for group calls as it's not applicable.
             else:
                 vars_to_get = param["names"].copy()
                 if include_geoids and param["is_microdata"]:
@@ -1091,6 +1157,9 @@ class CenDatHelper:
             context = {"param_index": i}
 
             for within_clause in expanded_within_clauses:
+                # --- Microdata Path ---
+                # Microdata requests are simpler: they require a dictionary specifying
+                # the target geography and its codes, plus any parent geographies.
                 if product_info.get("is_microdata"):
                     if not isinstance(within_clause, builtins.dict):
                         print(
@@ -1123,11 +1192,15 @@ class CenDatHelper:
                         )
                     all_tasks.append((vintage_url, api_params, context))
 
+                # --- Aggregate Data Path ---
+                # This path is more complex as it needs to handle geographic hierarchies.
                 elif product_info.get("is_aggregate"):
                     required_geos = param.get("requires") or []
                     provided_parent_geos = {}
                     target_geo_codes = None
 
+                    # If `within` is a dictionary, parse out the target geography codes
+                    # and any provided parent geographies.
                     if isinstance(within_clause, builtins.dict):
                         within_copy = within_clause.copy()
                         target_geo_codes = within_copy.pop(target_geo, None)
@@ -1135,6 +1208,8 @@ class CenDatHelper:
                             k: v for k, v in within_copy.items() if k in required_geos
                         }
 
+                    # Case A: The target geography itself is specified in `within`.
+                    # No discovery or wildcards needed; we can build the call directly.
                     if target_geo_codes:
                         codes_str = (
                             target_geo_codes
@@ -1152,6 +1227,10 @@ class CenDatHelper:
                         all_tasks.append((vintage_url, api_params, context))
                         continue
 
+                    # Case B: Target geography is not specified. We need to figure out
+                    # the `for` and `in` clauses using wildcards or discovery.
+                    # `final_in_clause` will store the components of the `in` parameter.
+                    # A value of `None` indicates a level that needs discovery.
                     final_in_clause = {}
                     if required_geos:
                         for geo in required_geos:
@@ -1162,6 +1241,9 @@ class CenDatHelper:
                             else:
                                 final_in_clause[geo] = None  # Needs discovery
 
+                    # Some geographies have an optional parent for wildcards.
+                    # If that optional parent isn't provided, we should not include it
+                    # in the `in` clause at all.
                     optional_level = param.get("optionalWithWCFor")
                     if optional_level and optional_level not in provided_parent_geos:
                         final_in_clause.pop(optional_level, None)
@@ -1170,6 +1252,7 @@ class CenDatHelper:
                         geo for geo, code in final_in_clause.items() if code is None
                     ]
 
+                    # If there are levels that need discovery, call the recursive helper.
                     combinations = []
                     if geos_to_fetch:
                         print(f"ℹ️ Discovering parent geographies for: {geos_to_fetch}")
@@ -1193,6 +1276,7 @@ class CenDatHelper:
                             f"✅ Found {len(combinations)} combinations. Building API queries..."
                         )
 
+                    # Build an API task for each discovered parent geography combination.
                     for combo in combinations:
                         call_in_clause = final_in_clause.copy()
                         call_in_clause.update(combo)
@@ -1213,6 +1297,7 @@ class CenDatHelper:
 
         self.n_calls = len(all_tasks)
 
+        # If in preview mode, print the first few planned calls and exit.
         if preview_only:
             print(f"ℹ️ Preview: this will yield {self.n_calls} API call(s).")
             for i, (url, params, _) in enumerate(all_tasks[:5]):
@@ -1225,6 +1310,7 @@ class CenDatHelper:
 
         else:
             print(f"ℹ️ Making {self.n_calls} API call(s)...")
+            # Execute all API calls concurrently.
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_to_context = {
                     executor.submit(
@@ -1233,6 +1319,7 @@ class CenDatHelper:
                     for url, params, context in all_tasks
                 }
                 for future in as_completed(future_to_context):
+                    # As each call completes, aggregate its results.
                     context = future_to_context[future]
                     param_index = context["param_index"]
                     try:
@@ -1244,6 +1331,7 @@ class CenDatHelper:
                     except Exception as exc:
                         print(f"❌ Task for {context} generated an exception: {exc}")
 
+            # Attach the aggregated data back to the original parameter dictionaries.
             for i, param in enumerate(self.params):
                 aggregated_result = results_aggregator[i]
                 param["schema"] = aggregated_result["schema"]
