@@ -1326,7 +1326,7 @@ class CenDatHelper:
                     for item in response.json()["services"]
                     if re.search(r"ACS|Census|Current", item["name"])
                 ]
-                print(f"✅ Successfully fetched map servers.")
+                print("✅ Successfully fetched map servers.")
 
             except requests.exceptions.RequestException as e:
                 print(f"❌ HTTP Request failed: {e}")
@@ -1546,7 +1546,7 @@ class CenDatHelper:
                                 }
                                 for map_server_layer in map_server_layers
                             ]
-                            geo_tasks.append(*geo_params)
+                            geo_tasks.extend(geo_params)
                         continue
 
                     # Case B: Target geography is not specified. We need to figure out
@@ -1626,7 +1626,7 @@ class CenDatHelper:
                                 }
                                 for map_server_layer in map_server_layers
                             ]
-                            geo_tasks.append(*geo_params)
+                            geo_tasks.extend(geo_params)
 
         if not data_tasks:
             print("❌ Error: Could not determine any API calls to make.")
@@ -1651,10 +1651,10 @@ class CenDatHelper:
             with ProcessPoolExecutor(max_workers=2) as process_executor:
                 # Submit the two master jobs
                 data_future = process_executor.submit(
-                    self._data_fetching, data_tasks, self.timeout, self.max_workers
+                    self._data_fetching, data_tasks, timeout, max_workers
                 )
                 geo_future = process_executor.submit(
-                    self._geometry_fetching, geo_tasks, self.timeout, self.max_workers
+                    self._geometry_fetching, geo_tasks, timeout, max_workers
                 )
 
                 # Important: Store which future is which

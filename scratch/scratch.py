@@ -8,11 +8,11 @@ cdh.list_products(years=[2023], patterns=r"acs/acs5\)")
 cdh.set_products()
 # cdh.list_groups(patterns="sex by age")
 cdh.set_groups(["B17001"])
-cdh.describe_groups()
+# cdh.describe_groups()
 cdh.set_geos(["160"])
 response = cdh.get_data(
     include_names=True,
-    # include_geometry=True,
+    include_geometry=True,
     within={"state": "08"},
 )
 df = response.to_polars(concat=True, destring=True)
