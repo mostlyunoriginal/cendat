@@ -13,7 +13,7 @@ cdh.set_geos(["160"])
 response = cdh.get_data(
     include_names=True,
     include_geometry=True,
-    within={"state": "08"},
+    # within={"state": "08"},
 )
 df = response.to_polars(concat=True, destring=True)
 df.glimpse()

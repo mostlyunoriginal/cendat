@@ -1331,6 +1331,19 @@ class CenDatHelper:
             except requests.exceptions.RequestException as e:
                 print(f"❌ HTTP Request failed: {e}")
 
+            # Helper function to correctly format TIGERweb SQL WHERE clauses,
+            # handling both single values and lists of values.
+            def format_sql_in_clause(key, value):
+                # Map the user-facing geo name (e.g., 'state') to the TIGERweb field name (e.g., 'STATE')
+                field = desc_map[key]
+                if isinstance(value, list):
+                    # For a list, create a comma-separated, quoted string: "'val1','val2'"
+                    values_str = ",".join(f"'{item}'" for item in value)
+                    return f"{field} IN ({values_str})"
+                else:
+                    # For a single value, just wrap it in quotes
+                    return f"{field} IN ('{value}')"
+
         data_tasks = []
         geo_tasks = []
 
@@ -1535,11 +1548,12 @@ class CenDatHelper:
                         if include_geometry and not skip_geo:
                             geo_params = [
                                 {
+                                    "param_index": i,
                                     "map_server": map_server,
                                     "layer_id": map_server_layer,
                                     "where_clause": " AND ".join(
                                         [
-                                            f"{desc_map[k]} IN ({v})"
+                                            format_sql_in_clause(k, v)
                                             for k, v in within_clause.items()
                                         ]
                                     ),
@@ -1612,17 +1626,29 @@ class CenDatHelper:
                                 [f"{k}:{v}" for k, v in call_in_clause.items()]
                             )
                         data_tasks.append((vintage_url, api_params, context))
-                        if include_geometry and not skip_geo and call_in_clause:
+
+                        # Corrected logic for geometry task creation
+                        if include_geometry and not skip_geo:
+                            # Build the WHERE clause conditions from the call_in_clause dictionary.
+                            where_conditions = [
+                                format_sql_in_clause(k, v)
+                                for k, v in call_in_clause.items()
+                            ]
+
+                            # If there are no conditions (e.g., a nationwide query for "us"),
+                            # use '1=1' as a universal "select all" filter. Otherwise, join them.
+                            final_where_clause = (
+                                " AND ".join(where_conditions)
+                                if where_conditions
+                                else "1=1"
+                            )
+
                             geo_params = [
                                 {
+                                    "param_index": i,
                                     "map_server": map_server,
                                     "layer_id": map_server_layer,
-                                    "where_clause": " AND ".join(
-                                        [
-                                            f"{desc_map[k]} IN ({v})"
-                                            for k, v in call_in_clause.items()
-                                        ]
-                                    ),
+                                    "where_clause": final_where_clause,
                                 }
                                 for map_server_layer in map_server_layers
                             ]
@@ -1648,29 +1674,32 @@ class CenDatHelper:
         else:
             print(f"ℹ️ Making {self.n_calls} API call(s)...")
             # Execute all API calls concurrently.
-            with ProcessPoolExecutor(max_workers=2) as process_executor:
-                # Submit the two master jobs
-                data_future = process_executor.submit(
-                    self._data_fetching, data_tasks, timeout, max_workers
-                )
-                geo_future = process_executor.submit(
-                    self._geometry_fetching, geo_tasks, timeout, max_workers
-                )
+            # We use a ThreadPoolExecutor here instead of a ProcessPoolExecutor.
+            # API calls are I/O-bound (waiting on the network), not CPU-bound,
+            # so threads provide excellent concurrency without the overhead and
+            # potential pickling issues of separate processes.
+            try:
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    # Submit the two master jobs for data and geometry fetching.
+                    # Note: The order of max_workers and timeout has been corrected
+                    # to match the method signatures.
+                    future_data = executor.submit(
+                        self._data_fetching, data_tasks, max_workers, timeout
+                    )
+                    future_geo = executor.submit(
+                        self._geometry_fetching, geo_tasks, max_workers, timeout
+                    )
 
-                # Important: Store which future is which
-                futures = {data_future: "data", geo_future: "geo"}
+                    # Wait for both futures to complete. The .result() call will
+                    # re-raise any exceptions that occurred in the thread.
+                    future_data.result()
+                    future_geo.result()
 
-                for future in as_completed(futures):
-                    result_type = futures[future]
-                    try:
-                        if result_type == "data":
-                            tabular_data = future.result()
-                        elif result_type == "geo":
-                            geometries_gdf = future.result()
-                    except Exception as exc:
-                        print(f"❌ A master {result_type} task failed: {exc}")
+            except Exception as exc:
+                print(f"❌ A master fetching task failed: {exc}")
+                # Return an empty response if a master task fails
+                return CenDatResponse([])
 
-            if tabular_data is None or geometries_gdf is None or geometries_gdf.empty:
-                print("❌ Failed to retrieve both data and geometries. Cannot merge.")
-
-                return CenDatResponse(self.params)
+            # The _data_fetching and _geometry_fetching methods modify self.params in place.
+            # We can now return the CenDatResponse object with the populated params.
+            return CenDatResponse(self.params)
