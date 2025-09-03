@@ -1633,6 +1633,7 @@ class CenDatHelper:
                             where_conditions = [
                                 format_sql_in_clause(k, v)
                                 for k, v in call_in_clause.items()
+                                if v != "*"
                             ]
 
                             # If there are no conditions (e.g., a nationwide query for "us"),

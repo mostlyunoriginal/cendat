@@ -13,7 +13,7 @@ cdh.set_geos(["160"])
 response = cdh.get_data(
     include_names=True,
     include_geometry=True,
-    # within={"state": "08"},
+    within={"state": ["08", "56"]},
 )
 df = response.to_polars(concat=True, destring=True)
 df.glimpse()
@@ -33,11 +33,14 @@ response.tabulate(
 
 # ------------------
 
+cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
 cdh.list_products(years=[2023], patterns=r"/acs/acs5\)")
 cdh.set_products()
 cdh.set_variables("B01001_001E")  # total population
 cdh.set_geos("150")
-response = cdh.get_data()
+response = cdh.get_data(
+    include_names=True, include_geometry=True, within={"state": ["08", "56"]}
+)
 
 # how many counties
 response.tabulate("state", where="B01001_001E > 10_000")
