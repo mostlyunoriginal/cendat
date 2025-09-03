@@ -2,9 +2,10 @@ import re
 import requests
 import itertools
 import builtins
+import copy
 from collections import defaultdict
 from typing import List, Union, Tuple, Dict, Optional, Callable
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from .CenDatResponse import CenDatResponse
 
 
@@ -337,10 +338,15 @@ class CenDatHelper:
                     )
                     continue
                 prods_to_set.extend(matching_products)
-        self.products = []
+
         if not prods_to_set:
             print("❌ Error: No valid products were found to set.")
             return
+
+        self.products = []
+        self.groups = []
+        self.variables = []
+        self.geos = []
         for product in prods_to_set:
             product["base_url"] = product.get("url", "")
             self.products.append(product)
@@ -1250,6 +1256,7 @@ class CenDatHelper:
         include_geoids: bool = False,
         include_attributes: bool = False,
         include_geometry: bool = False,
+        in_place: bool = False,
     ) -> "CenDatResponse":
         """
         Retrieves data from the Census API based on the set parameters.
@@ -1291,6 +1298,16 @@ class CenDatHelper:
             return CenDatResponse([])
 
         if include_geometry:
+            try:
+                import geopandas as gpd
+            except ImportError:
+                print(
+                    "❌ geopandas is not installed, but it is required for geometry fetching. "
+                    "Please install it using 'pip install geopandas' and try again."
+                )
+                return CenDatResponse([])
+
+            include_geoids = True
 
             valid_sumlevs_geometry = {
                 "020": ["Census Regions"],
@@ -1384,7 +1401,7 @@ class CenDatHelper:
                 continue
 
             if include_geometry:
-                skip_geo = False
+                skip_geometry = False
                 if (
                     product_info["type"].split("/")[0] == "dec"
                     and product_info["vintage"][0] >= 2010
@@ -1406,16 +1423,16 @@ class CenDatHelper:
                     map_server = "TIGERweb/tigerWMS_Current"
 
                 if map_server not in map_servers:
-                    skip_geo = True
+                    skip_geometry = True
                     print(
                         f"❌ Error: the requested map server '{map_server}' is not available."
                     )
                 if param["sumlev"] not in valid_sumlevs_geometry.keys():
-                    skip_geo = True
+                    skip_geometry = True
                     print(
                         f"❌ Error: the requested summary level ({param['sumlev']}) is currently supported for geometry."
                     )
-                if not skip_geo:
+                if not skip_geometry:
                     url = f"https://tigerweb.geo.census.gov/arcgis/rest/services/{map_server}/MapServer?f=pjson"
 
                     try:
@@ -1545,7 +1562,7 @@ class CenDatHelper:
                                 [f"{k}:{v}" for k, v in provided_parent_geos.items()]
                             )
                         data_tasks.append((vintage_url, api_params, context))
-                        if include_geometry and not skip_geo:
+                        if include_geometry and not skip_geometry:
                             geo_params = [
                                 {
                                     "param_index": i,
@@ -1628,7 +1645,7 @@ class CenDatHelper:
                         data_tasks.append((vintage_url, api_params, context))
 
                         # Corrected logic for geometry task creation
-                        if include_geometry and not skip_geo:
+                        if include_geometry and not skip_geometry:
                             # Build the WHERE clause conditions from the call_in_clause dictionary.
                             where_conditions = [
                                 format_sql_in_clause(k, v)
@@ -1703,4 +1720,12 @@ class CenDatHelper:
 
             # The _data_fetching and _geometry_fetching methods modify self.params in place.
             # We can now return the CenDatResponse object with the populated params.
-            return CenDatResponse(self.params)
+
+            params_copy = copy.deepcopy(self.params)
+            if in_place is False:
+                for param in self.params:
+                    param["data"] = []
+                    if "geometry" in param:
+                        param["geometry"] = gpd.GeoDataFrame()
+
+                return CenDatResponse(params_copy)
