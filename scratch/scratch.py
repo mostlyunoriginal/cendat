@@ -1,6 +1,7 @@
 import os
 from cendat import CenDatHelper
 import polars as pl
+import geopandas as gpd
 
 cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
 
@@ -39,7 +40,8 @@ cdh.set_products()
 cdh.set_variables("B01001_001E")  # total population
 cdh.set_geos("150")
 response = cdh.get_data(
-    include_names=True, include_geometry=True, within={"state": ["08", "56"]}
+    include_geometry=True,
+    within={"state": ["08", "56"]},
 )
 
 # how many counties
