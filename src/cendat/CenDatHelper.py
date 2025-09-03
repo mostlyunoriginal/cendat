@@ -1148,10 +1148,6 @@ class CenDatHelper:
         import pandas as pd
         import geopandas as gpd
 
-        # --- Placeholder Mappings ---
-        # In a real implementation, these would be class attributes or loaded from a config.
-        SERVICE_MAP = {"some_product_vintage_key": "TIGERweb/tigerWMS_ACS2022"}
-        LAYER_MAP = {"some_geo_key": 8}
         RECORDS_PER_PAGE = 1000
 
         # This will hold all the individual page-fetching tasks
@@ -1160,12 +1156,9 @@ class CenDatHelper:
         print("ℹ️ Pre-querying for geometry counts to determine pagination...")
         # Step 1 & 2: Pre-flight requests to get counts and create paginated tasks
         for task in tasks:
-            # You would use your mapping logic here to get the service and layer_id
-            # For now, we use placeholders.
-            service = SERVICE_MAP.get(
-                "some_product_vintage_key", "TIGERweb/tigerWMS_Current"
-            )
-            layer_id = LAYER_MAP.get("some_geo_key", 8)  # Placeholder for tracts
+
+            service = task["map_server"]
+            layer_id = task["layer_id"]
             where_clause = task["where_clause"]
 
             try:
@@ -1533,6 +1526,21 @@ class CenDatHelper:
                                 [f"{k}:{v}" for k, v in provided_parent_geos.items()]
                             )
                         data_tasks.append((vintage_url, api_params, context))
+                        if include_geometry and not skip_geo:
+                            geo_params = [
+                                {
+                                    "map_server": map_server,
+                                    "layer_id": map_server_layer,
+                                    "where_clause": " AND ".join(
+                                        [
+                                            f"{desc_map[k]} IN ({v})"
+                                            for k, v in within_clause.items()
+                                        ]
+                                    ),
+                                }
+                                for map_server_layer in map_server_layers
+                            ]
+                            geo_tasks.append(*geo_params)
                         continue
 
                     # Case B: Target geography is not specified. We need to figure out
@@ -1598,6 +1606,21 @@ class CenDatHelper:
                                 [f"{k}:{v}" for k, v in call_in_clause.items()]
                             )
                         data_tasks.append((vintage_url, api_params, context))
+                        if include_geometry and not skip_geo and call_in_clause:
+                            geo_params = [
+                                {
+                                    "map_server": map_server,
+                                    "layer_id": map_server_layer,
+                                    "where_clause": " AND ".join(
+                                        [
+                                            f"{desc_map[k]} IN ({v})"
+                                            for k, v in call_in_clause.items()
+                                        ]
+                                    ),
+                                }
+                                for map_server_layer in map_server_layers
+                            ]
+                            geo_tasks.append(*geo_params)
 
         if not data_tasks:
             print("❌ Error: Could not determine any API calls to make.")
