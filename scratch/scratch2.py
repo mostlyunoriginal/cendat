@@ -52,7 +52,7 @@ def get_tiger_polygons(
 
 colorado_gdf = get_tiger_polygons(
     layer_id=8,
-    where_clause="STATE = '08'",
+    where_clause="STATE IN ('08') AND COUNTY IN ('069')",
     fields="GEOID,NAME",  # Only request these three attribute fields
     service="TIGERweb/tigerWMS_Census2020",
 )

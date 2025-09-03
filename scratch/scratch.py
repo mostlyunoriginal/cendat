@@ -66,3 +66,15 @@ response.tabulate(
 )
 
 # ------------------
+
+cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
+
+cdh.list_products(patterns=r"2010/dec/sf1\)")
+cdh.set_products()
+cdh.list_groups(patterns=r"^race")
+cdh.describe_groups("PCT23")
+cdh.set_groups(["PCT23"])
+cdh.set_geos("160")
+response = cdh.get_data(
+    within={"state": "08"},
+)
