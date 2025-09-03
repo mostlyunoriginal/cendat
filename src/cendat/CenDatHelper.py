@@ -1376,12 +1376,17 @@ class CenDatHelper:
                     product_info["type"].split("/")[0] == "dec"
                     and product_info["vintage"][0] >= 2010
                 ):
-                    map_server = f"TIGERweb/tigerWMS_Census{product_info["vintage"][0]}"
+                    map_server = f"TIGERweb/tigerWMS_Census{product_info['vintage'][0]}"
                 elif product_info["type"].split("/")[0] == "acs":
-                    if product_info["vintage"][0] >= 2012:
+                    if (
+                        product_info["vintage"][0] >= 2012
+                        and product_info["vintage"][0] != 2020
+                    ):
                         map_server = (
-                            f"TIGERweb/tigerWMS_ACS{product_info["vintage"][0]}"
+                            f"TIGERweb/tigerWMS_ACS{product_info['vintage'][0]}"
                         )
+                    elif product_info["vintage"][0] >= 2012:
+                        map_server = "TIGERweb/tigerWMS_Census2020"
                     else:
                         map_server = "TIGERweb/tigerWMS_Census2010"
                 else:
@@ -1395,20 +1400,21 @@ class CenDatHelper:
                 if param["sumlev"] not in valid_sumlevs_geometry.keys():
                     skip_geo = True
                     print(
-                        f"❌ Error: the requested summary level ({param["sumlev"]}) is currently supported for geometry."
+                        f"❌ Error: the requested summary level ({param['sumlev']}) is currently supported for geometry."
                     )
                 if not skip_geo:
-                    url = f"https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/{map_server}/MapServer?f=pjson"
+                    url = f"https://tigerweb.geo.census.gov/arcgis/rest/services/{map_server}/MapServer?f=pjson"
 
                     try:
                         response = requests.get(url)
                         response.raise_for_status()
+
                         map_server_layers = [
                             item["id"]
                             for item in response.json()["layers"]
                             if item["name"] in valid_sumlevs_geometry[param["sumlev"]]
                         ]
-                        print(f"✅ Successfully fetched map servers.")
+                        print("✅ Successfully fetched map servers.")
 
                     except requests.exceptions.RequestException as e:
                         print(f"❌ HTTP Request failed: {e}")
