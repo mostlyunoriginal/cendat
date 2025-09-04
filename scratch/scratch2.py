@@ -35,8 +35,9 @@ def get_tiger_polygons(
         response = requests.get(API_URL, params=params)
         response.raise_for_status()
         gdf = gpd.GeoDataFrame.from_features(response.json()["features"])
+        raw = response.json()["features"]
         print(f"✅ Successfully fetched {len(gdf)} polygons.")
-        return gdf
+        return raw
 
     except requests.exceptions.RequestException as e:
         print(f"❌ HTTP Request failed: {e}")

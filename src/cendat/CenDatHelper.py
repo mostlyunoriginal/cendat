@@ -1237,7 +1237,7 @@ class CenDatHelper:
                     print(f"❌ Geometry fetch task failed for {context}: {exc}")
 
         # Step 5: Concatenate GDFs and attach to self.params
-        print("✅ Geometry fetching complete. Merging results.")
+        print("✅ Geometry fetching complete. Stacking results.")
         for i, param in enumerate(self.params):
             if i in results_aggregator:
                 # Concatenate all the GeoDataFrame pages into a single one
@@ -1304,6 +1304,14 @@ class CenDatHelper:
                 print(
                     "❌ geopandas is not installed, but it is required for geometry fetching. "
                     "Please install it using 'pip install geopandas' and try again."
+                )
+                return CenDatResponse([])
+            try:
+                import pandas as pd
+            except ImportError:
+                print(
+                    "❌ pandas is not installed, but it is required for geometry fetching. "
+                    "Please install it using 'pip install pandas' and try again."
                 )
                 return CenDatResponse([])
 

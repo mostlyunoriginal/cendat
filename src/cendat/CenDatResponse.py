@@ -317,6 +317,89 @@ class CenDatResponse:
 
         return pd.concat(dataframes, ignore_index=True) if concat else dataframes
 
+    def to_gpd(
+        self, destring: bool = False, join_strategy: str = "left"
+    ) -> "gpd.GeoDataFrame":
+        """
+        Converts the response data into a GeoPandas GeoDataFrame with geometries.
+
+        This method first converts the tabular data to Pandas DataFrames, then
+        joins them with the corresponding geometry data fetched via the
+        `include_geometry=True` flag in `CenDatHelper.get_data()`.
+
+        Args:
+            destring (bool): If True, attempts to convert string representations
+                of numbers into native numeric types. Passed to `to_pandas`.
+                Defaults to False.
+            join_strategy (str): The type of join to perform between the data
+                and the geometries. Must be 'left' (default) or 'inner'.
+                - 'left': Keeps all records from the data, adding geometry where available.
+                - 'inner': Keeps only records that exist in both data and geometry sets.
+
+        Returns:
+            gpd.GeoDataFrame: A single, concatenated GeoDataFrame containing both
+            the tabular data and the geographic shapes. Returns an empty
+            GeoDataFrame if GeoPandas is not installed or no data is available.
+        """
+        try:
+            import geopandas as gpd
+            import pandas as pd
+        except ImportError:
+            print(
+                "❌ GeoPandas and/or Pandas are not installed. Please install them with 'pip install geopandas pandas'"
+            )
+            return []
+
+        if join_strategy not in ["left", "inner"]:
+            raise ValueError("`join_strategy` must be either 'left' or 'inner'")
+
+        geodataframes = []
+        for item, processed_data, orient in self._prepare_dataframe_data(
+            destring, _data=None
+        ):
+            # Create the base pandas DataFrame
+            df = pd.DataFrame(
+                processed_data, columns=item["schema"] if orient == "row" else None
+            )
+
+            geometry_gdf = item.get("geometry")
+
+            # Proceed only if geometry data is available for this item
+            if geometry_gdf is not None and not geometry_gdf.empty:
+                if "GEOID" not in df.columns or "GEOID" not in geometry_gdf.columns:
+                    print(
+                        f"⚠️ Warning: 'GEOID' column not found in data or geometry for product '{item['product']}'. Cannot join. "
+                        "Try re-running get_data() with include_geoids=True."
+                    )
+                    continue
+
+                # To prevent column clashes (e.g., NAME_x, NAME_y), only use essential columns from the geometry GDF
+                geo_subset = geometry_gdf[["GEOID", "geometry"]]
+
+                # Merge the tabular data with the geometry data
+                merged_df = df.merge(geo_subset, on="GEOID", how=join_strategy)
+
+                # Convert the merged result into a GeoDataFrame
+                gdf = gpd.GeoDataFrame(merged_df, geometry="geometry")
+
+                # Add context columns
+                gdf["product"] = item["product"]
+                gdf["vintage"] = item["vintage"][0]
+                gdf["vintage"] = gdf["vintage"].astype("string")
+                gdf["sumlev"] = item["sumlev"]
+                gdf["desc"] = item["desc"]
+
+                geodataframes.append(gdf)
+            else:
+                print(
+                    f"ℹ️ No geometry found for product '{item['product']}'. Skipping this item for GeoDataFrame conversion."
+                )
+
+        if not geodataframes:
+            return gpd.GeoDataFrame()
+
+        return pd.concat(geodataframes, ignore_index=True)
+
     def tabulate(
         self,
         *variables: str,
