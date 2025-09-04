@@ -1524,12 +1524,12 @@ class CenDatHelper:
                 vars_to_get = [f"group({param['group_name']})"]
                 if include_geoids and param["is_microdata"]:
                     print("ℹ️ GEO_ID not valid for microdata - request ignored.")
-                elif include_geoids:
-                    vars_to_get.insert(0, "GEO_ID")
+                # elif include_geoids:
+                #     vars_to_get.insert(0, "GEO_ID")
                 if include_names and param["is_microdata"]:
                     print("ℹ️ NAME not valid for microdata - request ignored.")
-                elif include_names:
-                    vars_to_get.insert(0, "NAME")
+                # elif include_names:
+                #     vars_to_get.insert(0, "NAME")
                 # `include_attributes` is ignored for group calls as it's not applicable.
             else:
                 vars_to_get = param["names"].copy()

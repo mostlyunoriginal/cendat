@@ -237,6 +237,7 @@ class CenDatResponse:
                 schema=item["schema"],
                 orient=orient,
                 schema_overrides=schema_overrides,
+                infer_schema_length=None,
             )
 
             # Add context columns

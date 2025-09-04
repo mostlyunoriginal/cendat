@@ -11,14 +11,16 @@ cdh.set_products()
 cdh.set_groups(["B17001"])
 # cdh.describe_groups()
 # cdh.set_variables("B01001_001E")
-cdh.set_geos(["040"])
+cdh.set_geos(["160"])
 response = cdh.get_data(
+    # in_place=True,
     include_names=True,
+    include_geoids=True,
     include_geometry=True,
-    # within={"state": ["08", "56"]},
+    within={"state": ["08", "56"]},
 )
-# df = response.to_polars(destring=True, concat=True)
-df = response.to_gpd(destring=True, join_strategy="inner")
+df = response.to_polars(destring=True, concat=True)
+# df = response.to_gpd(destring=True, join_strategy="inner")
 print(df.head())
 
 response.tabulate(
