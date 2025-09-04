@@ -318,7 +318,10 @@ class CenDatResponse:
         return pd.concat(dataframes, ignore_index=True) if concat else dataframes
 
     def to_gpd(
-        self, destring: bool = False, join_strategy: str = "left"
+        self,
+        dtypes: Optional[Dict] = None,
+        destring: bool = False,
+        join_strategy: str = "left",
     ) -> "gpd.GeoDataFrame":
         """
         Converts the response data into a GeoPandas GeoDataFrame with geometries.
@@ -361,14 +364,18 @@ class CenDatResponse:
             df = pd.DataFrame(
                 processed_data, columns=item["schema"] if orient == "row" else None
             )
+            df["GEOID"] = df["GEO_ID"].str[9:]
+
+            if dtypes:
+                df = df.astype(dtypes, errors="ignore")
 
             geometry_gdf = item.get("geometry")
 
             # Proceed only if geometry data is available for this item
             if geometry_gdf is not None and not geometry_gdf.empty:
-                if "GEOID" not in df.columns or "GEOID" not in geometry_gdf.columns:
+                if "GEO_ID" not in df.columns or "GEOID" not in geometry_gdf.columns:
                     print(
-                        f"⚠️ Warning: 'GEOID' column not found in data or geometry for product '{item['product']}'. Cannot join. "
+                        f"⚠️ Warning: 'GEO_ID' (for data) or 'GEOID' (for geometry) column not found for product '{item['product']}'. Cannot join. "
                         "Try re-running get_data() with include_geoids=True."
                     )
                     continue
@@ -376,7 +383,7 @@ class CenDatResponse:
                 # To prevent column clashes (e.g., NAME_x, NAME_y), only use essential columns from the geometry GDF
                 geo_subset = geometry_gdf[["GEOID", "geometry"]]
 
-                # Merge the tabular data with the geometry data
+                # Merge the tabular data with the geometry data, specifying the different key names
                 merged_df = df.merge(geo_subset, on="GEOID", how=join_strategy)
 
                 # Convert the merged result into a GeoDataFrame

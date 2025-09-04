@@ -35,13 +35,19 @@ The library has optional dependencies for converting the response data into pand
 pip install cendat[pandas]
 ```
 
+### Install with geopandas support
+
+``` bash
+pip install cendat[geopandas]
+```
+
 ### Install with polars support
 
 ``` bash
 pip install cendat[polars]
 ```
 
-### Install with both
+### Install with all three
 
 ``` bash
 pip install cendat[all]
@@ -86,7 +92,8 @@ Lists available data products, filtered by year and search patterns.
 
 ### `set_products(self, titles=None)`
 
-Sets the active data products for the session.
+Sets the active data products for the session and unsets any previously set variables, geos, and groups.
+
 
 -   **`titles`** (`str` \| `list[str]`, optional): The title or list of titles of the products to set. If `None`, it sets all products from the last `list_products()` call.
 
@@ -152,10 +159,13 @@ Executes the API calls based on the set parameters and retrieves the data.
     -   Defaults to `'us'` for nationwide data where applicable.
 -   **`max_workers`** (`int`, optional): The maximum number of concurrent threads to use for making API calls. For requests generating thousands of calls, it's wise to keep this value lower (e.g., `< 100`) to avoid server-side connection issues. Defaults to `100`.
 -   **`timeout`** (`int`, optional): Request timeout in seconds for each API call. Defaults to `30`.
--   **`preview_only`** (`bool`, optional): If `True`, builds the list of API calls but does not execute them. Useful for debugging. Defaults to `False`.
--   **`include_names`** (`bool`, optional): If `True`, includes geography name (`NAME`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Note that NAME requests for microdata products will be ignored (with a message). Defaults to `False`.
--   **`include_geoids`** (`bool`, optional): If `True`, includes geography ID (`GEO_ID`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Note that GEO_ID requests for microdata products will be ignored (with a message). Defaults to `False`.
--   **`include_attributes`** (`bool`, optional): If `True`, includes attributes associated with set variables (e.g., margins of error) in API request if available. Defaults to `False`.
+-   **`preview_only`** (`bool`): If `True`, builds the list of API calls but does not execute them. Useful for debugging. Defaults to `False`.
+-   **`include_names`** (`bool`): If `True`, includes geography name (`NAME`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Note that NAME requests for microdata products will be ignored (with a message). Defaults to `False`.
+-   **`include_geoids`** (`bool`): If `True`, includes geography ID (`GEO_ID`) in API request--this variable is a special keyword understood by the data endpoint but is not included in `variables.json` and is therefore not discoverable through `list_variables()`. Note that GEO_ID requests for microdata products will be ignored (with a message). Defaults to `False`.
+-   **`include_attributes`** (`bool`): If `True`, includes attributes associated with set variables (e.g., margins of error) in API request if available. Defaults to `False`.
+-   **`include_geometry`** (`bool`): If `True`, concurrent queries are issued to the TIGERweb REST Services for eligible products and geographies. Defaults to `False`. Note that only aggregate data products and certain geographies (currently `region: 020`, `division: 030`, `state: 040`, `county: 050`, `county subdivision: 060`, `census tract: 140`, `census block group: 150`, and `place: 160`) are supported.
+-   **`in_place`** (`bool`): If `True`, data and geometries are not purged from the instantiated helper object's `params` and the method returns `None`. Defaults to `False`.
+
 
 ------------------------------------------------------------------------
 
@@ -178,6 +188,15 @@ Converts the raw response data into a list of Pandas DataFrames.
 -   **`dtypes`** (`dict`, optional): A dictionary mapping column names to Pandas data types, which is passed to the `.astype()` method. Example: `{'POP': 'int64'}`.
 -   **`concat`** (`bool`): If `True`, concatenates all resulting DataFrames into a single DataFrame. Defaults to `False`.
 -   **`destring`** (`bool`): If `True`, attempts to convert string representations of numbers into native numeric types. Defaults to `False`.
+
+### `to_gpd(self, dtypes=None, destring=False, join_strategy='left')`
+
+Converts the raw response data into a single Pandas GeoDataFrame with geometries included.
+
+-   **`dtypes`** (`dict`, optional): A dictionary mapping column names to Pandas data types, which is passed to the `.astype()` method. Example: `{'POP': 'int64'}`.
+-   **`destring`** (`bool`): If `True`, attempts to convert string representations of numbers into native numeric types. Defaults to `False`.
+-   **`join_strategy`** (`str`): Determines how geometries are joined onto data. Can be `'left'` (default) or `'outer'`. Note that `'left'` may result in data rows with no geometries. This can happen for data products with no directly matching TIGERweb map server, and generally should not be the case for ACS or Decennial (> 2010) products.
+
 
 ### `tabulate(self, *variables, strat_by=None, weight_var=None, weight_div=None, where=None, logic=all, digits=1)`
 
@@ -304,5 +323,21 @@ response.tabulate(
     weight_var="B17001_001E",
     strat_by="vintage",
 )
+
+# --- ACS ANALYSIS: get race group variables and geometry for regions in 2011 ---
+
+cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
+cdh.list_products(years=[2011], patterns=r"acs/acs5\)")
+cdh.set_products()
+cdh.list_groups(patterns=r"^race")
+cdh.set_groups(["B02001"])
+cdh.describe_groups()
+cdh.set_geos(["020"])
+response = cdh.get_data(
+    include_names=True,
+    include_geometry=True,
+)
+gdf = response.to_gpd(destring=True, join_strategy="inner")
+print(gdf)
 
 ```

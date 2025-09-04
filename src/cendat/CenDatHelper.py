@@ -1123,6 +1123,7 @@ class CenDatHelper:
                 except Exception as exc:
                     print(f"❌ Task for {context} generated an exception: {exc}")
 
+        print("✅ Data fetching completed successfully.")
         # Attach the aggregated data back to the original parameter dictionaries.
         for i, param in enumerate(self.params):
             aggregated_result = results_aggregator[i]
@@ -1300,18 +1301,10 @@ class CenDatHelper:
         if include_geometry:
             try:
                 import geopandas as gpd
-            except ImportError:
-                print(
-                    "❌ geopandas is not installed, but it is required for geometry fetching. "
-                    "Please install it using 'pip install geopandas' and try again."
-                )
-                return CenDatResponse([])
-            try:
                 import pandas as pd
             except ImportError:
                 print(
-                    "❌ pandas is not installed, but it is required for geometry fetching. "
-                    "Please install it using 'pip install pandas' and try again."
+                    "❌ GeoPandas and/or Pandas are not installed. Please install them with 'pip install geopandas pandas'"
                 )
                 return CenDatResponse([])
 
@@ -1452,7 +1445,7 @@ class CenDatHelper:
                             for item in response.json()["layers"]
                             if item["name"] in valid_sumlevs_geometry[param["sumlev"]]
                         ]
-                        print("✅ Successfully fetched map servers.")
+                        print("✅ Successfully fetched map server layers.")
 
                     except requests.exceptions.RequestException as e:
                         print(f"❌ HTTP Request failed: {e}")
@@ -1700,20 +1693,14 @@ class CenDatHelper:
         else:
             print(f"ℹ️ Making {self.n_calls} API call(s)...")
             # Execute all API calls concurrently.
-            # We use a ThreadPoolExecutor here instead of a ProcessPoolExecutor.
-            # API calls are I/O-bound (waiting on the network), not CPU-bound,
-            # so threads provide excellent concurrency without the overhead and
-            # potential pickling issues of separate processes.
             try:
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     # Submit the two master jobs for data and geometry fetching.
-                    # Note: The order of max_workers and timeout has been corrected
-                    # to match the method signatures.
-                    future_data = executor.submit(
-                        self._data_fetching, data_tasks, max_workers, timeout
-                    )
                     future_geo = executor.submit(
                         self._geometry_fetching, geo_tasks, max_workers, timeout
+                    )
+                    future_data = executor.submit(
+                        self._data_fetching, data_tasks, max_workers, timeout
                     )
 
                     # Wait for both futures to complete. The .result() call will
@@ -1725,9 +1712,6 @@ class CenDatHelper:
                 print(f"❌ A master fetching task failed: {exc}")
                 # Return an empty response if a master task fails
                 return CenDatResponse([])
-
-            # The _data_fetching and _geometry_fetching methods modify self.params in place.
-            # We can now return the CenDatResponse object with the populated params.
 
             params_copy = copy.deepcopy(self.params)
             if in_place is False:
