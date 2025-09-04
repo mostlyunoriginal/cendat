@@ -1123,12 +1123,16 @@ class CenDatHelper:
                 except Exception as exc:
                     print(f"❌ Task for {context} generated an exception: {exc}")
 
-        print("✅ Data fetching completed successfully.")
-        # Attach the aggregated data back to the original parameter dictionaries.
+        # After all tasks are complete, attach the aggregated data to self.params
+        print("✅ Data fetching complete. Stacking results.")
         for i, param in enumerate(self.params):
             aggregated_result = results_aggregator[i]
-            param["schema"] = aggregated_result["schema"]
-            param["data"] = aggregated_result["data"]
+            if aggregated_result["schema"]:
+                param["schema"] = aggregated_result["schema"]
+                param["data"] = aggregated_result["data"]
+            else:
+                # Ensure 'data' key exists, even if empty, for downstream consistency.
+                param["data"] = []
 
     def _geometry_fetching(
         self,
@@ -1145,7 +1149,7 @@ class CenDatHelper:
 
         Strategy:
         1. For each initial task, make a pre-flight request to get the total count
-           of geometries.
+           of geometries. These requests are run concurrently.
         2. Based on the count, calculate how many paginated requests are needed.
         3. Create a list of all sub-tasks (one for each page).
         4. Execute all sub-tasks concurrently in a thread pool.
@@ -1161,48 +1165,52 @@ class CenDatHelper:
         paginated_tasks = []
 
         print("ℹ️ Pre-querying for geometry counts to determine pagination...")
-        # Step 1 & 2: Pre-flight requests to get counts and create paginated tasks
-        for task in tasks:
-
-            service = task["map_server"]
-            layer_id = task["layer_id"]
-            where_clause = task["where_clause"]
-
-            try:
-                total_records = self._get_gdf_from_url(
-                    layer_id=layer_id,
-                    where_clause=where_clause,
-                    service=service,
+        # Step 1 & 2: Concurrently pre-flight requests to get counts and create paginated tasks
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_task = {
+                executor.submit(
+                    self._get_gdf_from_url,
+                    layer_id=task["layer_id"],
+                    where_clause=task["where_clause"],
+                    service=task["map_server"],
                     timeout=timeout,
                     count_only=True,
-                )
+                ): task
+                for task in tasks
+            }
 
-                if total_records == 0:
+            for future in as_completed(future_to_task):
+                task = future_to_task[future]
+                where_clause = task["where_clause"]
+                try:
+                    total_records = future.result()
+
+                    if total_records == 0:
+                        print(
+                            f"  - No geometries found for WHERE '{where_clause[:50]}...'. Skipping."
+                        )
+                        continue
+
                     print(
-                        f"  - No geometries found for WHERE '{where_clause[:50]}...'. Skipping."
+                        f"  - Found {total_records} geometries for WHERE '{where_clause[:50]}...'. Building paginated tasks."
                     )
-                    continue
 
-                print(
-                    f"  - Found {total_records} geometries for WHERE '{where_clause[:50]}...'. Building paginated tasks."
-                )
-
-                # Step 3: Create sub-tasks for each page
-                for offset in range(0, total_records, RECORDS_PER_PAGE):
-                    paginated_tasks.append(
-                        {
-                            "param_index": task["param_index"],
-                            "layer_id": layer_id,
-                            "where_clause": where_clause,
-                            "service": service,
-                            "offset": offset,
-                            "n_records": RECORDS_PER_PAGE,
-                        }
+                    # Step 3: Create sub-tasks for each page
+                    for offset in range(0, total_records, RECORDS_PER_PAGE):
+                        paginated_tasks.append(
+                            {
+                                "param_index": task["param_index"],
+                                "layer_id": task["layer_id"],
+                                "where_clause": where_clause,
+                                "service": task["map_server"],
+                                "offset": offset,
+                                "n_records": RECORDS_PER_PAGE,
+                            }
+                        )
+                except Exception as exc:
+                    print(
+                        f"❌ Failed during geometry count pre-flight for {where_clause}: {exc}"
                     )
-            except Exception as exc:
-                print(
-                    f"❌ Failed during geometry count pre-flight for {where_clause}: {exc}"
-                )
 
         if not paginated_tasks:
             print("ℹ️ No paginated geometry tasks to execute.")
@@ -1332,6 +1340,61 @@ class CenDatHelper:
                 "place": "PLACE",
             }
 
+            state_codes = {
+                "WA": "53",
+                "DE": "10",
+                "DC": "11",
+                "WI": "55",
+                "WV": "54",
+                "HI": "15",
+                "FL": "12",
+                "WY": "56",
+                "PR": "72",
+                "NJ": "34",
+                "NM": "35",
+                "TX": "48",
+                "LA": "22",
+                "NC": "37",
+                "ND": "38",
+                "NE": "31",
+                "TN": "47",
+                "NY": "36",
+                "PA": "42",
+                "AK": "02",
+                "NV": "32",
+                "NH": "33",
+                "VA": "51",
+                "CO": "08",
+                "CA": "06",
+                "AL": "01",
+                "AR": "05",
+                "VT": "50",
+                "IL": "17",
+                "GA": "13",
+                "IN": "18",
+                "IA": "19",
+                "MA": "25",
+                "AZ": "04",
+                "ID": "16",
+                "CT": "09",
+                "ME": "23",
+                "MD": "24",
+                "OK": "40",
+                "OH": "39",
+                "UT": "49",
+                "MO": "29",
+                "MN": "27",
+                "MI": "26",
+                "RI": "44",
+                "KS": "20",
+                "MT": "30",
+                "MS": "28",
+                "SC": "45",
+                "KY": "21",
+                "OR": "41",
+                "SD": "46",
+            }
+
             url = (
                 "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb?f=pjson"
             )
@@ -1366,6 +1429,12 @@ class CenDatHelper:
         geo_tasks = []
 
         raw_within_clauses = within if isinstance(within, list) else [within]
+        if (
+            include_geometry
+            and raw_within_clauses in [[], ["us"]]
+            and any(param["sumlev"] == "040" for param in self.params)
+        ):
+            raw_within_clauses = [{"state": list(state_codes.values())}]
 
         # Expand the `within` clauses. If a user provides a list of codes for a
         # geography (e.g., `{'state': '08', 'county': ['001', '005']}`), this
@@ -1536,7 +1605,6 @@ class CenDatHelper:
                     required_geos = param.get("requires") or []
                     provided_parent_geos = {}
                     target_geo_codes = None
-
                     # If `within` is a dictionary, parse out the target geography codes
                     # and any provided parent geographies.
                     if isinstance(within_clause, builtins.dict):
@@ -1589,7 +1657,7 @@ class CenDatHelper:
                     if include_geometry:
                         param.pop("optionalWithWCFor", None)
                         if "wildcard" in param and isinstance(param["wildcard"], list):
-                            param["wildcard"] = param["wildcard"][:-1]
+                            param["wildcard"] = param["wildcard"][1:]
                     if required_geos:
                         for geo in required_geos:
                             if geo in provided_parent_geos:

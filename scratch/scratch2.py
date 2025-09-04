@@ -27,7 +27,7 @@ def get_tiger_polygons(
         "returnGeometry": "true",
         "returnCountOnly": "false",
         "resultOffset": 0,
-        "resultRecordCount": 500,
+        "resultRecordCount": 1000,
         "timeout": 60,
     }
 
@@ -35,9 +35,8 @@ def get_tiger_polygons(
         response = requests.get(API_URL, params=params)
         response.raise_for_status()
         gdf = gpd.GeoDataFrame.from_features(response.json()["features"])
-        raw = response.json()["features"]
         print(f"✅ Successfully fetched {len(gdf)} polygons.")
-        return raw
+        return gdf
 
     except requests.exceptions.RequestException as e:
         print(f"❌ HTTP Request failed: {e}")
@@ -48,12 +47,9 @@ def get_tiger_polygons(
     return gpd.GeoDataFrame()
 
 
-# --- Example Usage ---
-# Fetching counties in Colorado (layer 82) with only specific fields
-
-colorado_gdf = get_tiger_polygons(
-    layer_id=82,
-    where_clause="1=1",
-    fields="GEOID,NAME",  # Only request these three attribute fields
+gdf = get_tiger_polygons(
+    layer_id=80,
+    where_clause="STATE='99'",
+    fields="GEOID,NAME",
     service="TIGERweb/tigerWMS_ACS2023",
 )
