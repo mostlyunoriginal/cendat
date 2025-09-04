@@ -27,7 +27,7 @@ def get_tiger_polygons(
         "returnGeometry": "true",
         "returnCountOnly": "false",
         "resultOffset": 0,
-        "resultRecordCount": 1_000,
+        "resultRecordCount": 500,
         "timeout": 60,
     }
 
@@ -52,8 +52,8 @@ def get_tiger_polygons(
 # Fetching counties in Colorado (layer 82) with only specific fields
 
 colorado_gdf = get_tiger_polygons(
-    layer_id=8,
-    where_clause="STATE IN ('08') AND COUNTY IN ('069')",
+    layer_id=82,
+    where_clause="1=1",
     fields="GEOID,NAME",  # Only request these three attribute fields
-    service="TIGERweb/tigerWMS_Census2020",
+    service="TIGERweb/tigerWMS_ACS2023",
 )

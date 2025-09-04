@@ -1586,6 +1586,10 @@ class CenDatHelper:
                     # `final_in_clause` will store the components of the `in` parameter.
                     # A value of `None` indicates a level that needs discovery.
                     final_in_clause = {}
+                    if include_geometry:
+                        param.pop("optionalWithWCFor", None)
+                        if "wildcard" in param and isinstance(param["wildcard"], list):
+                            param["wildcard"] = param["wildcard"][:-1]
                     if required_geos:
                         for geo in required_geos:
                             if geo in provided_parent_geos:
@@ -1598,6 +1602,7 @@ class CenDatHelper:
                     # Some geographies have an optional parent for wildcards.
                     # If that optional parent isn't provided, we should not include it
                     # in the `in` clause at all.
+
                     optional_level = param.get("optionalWithWCFor")
                     if optional_level and optional_level not in provided_parent_geos:
                         final_in_clause.pop(optional_level, None)
