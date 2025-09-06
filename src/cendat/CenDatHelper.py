@@ -53,6 +53,7 @@ class CenDatHelper:
         self._filtered_groups_cache: Optional[List[Dict]] = None
         self._filtered_variables_cache: Optional[List[Dict]] = None
         self.n_calls: Optional[int] = None
+        self.call_type: Optional[str] = None
 
         if years is not None:
             self.set_years(years)
@@ -840,6 +841,7 @@ class CenDatHelper:
             ):
                 collapsed_vars[key][collapsed].append(var_info[granular])
         self.variables = list(collapsed_vars.values())
+        self.call_type = "variable"
         print("✅ Variables set:")
         for var_group in self.variables:
             print(
@@ -873,9 +875,7 @@ class CenDatHelper:
         }
 
         # Case 1: Variables are set (standard behavior)
-        if self.variables and not all(
-            param.get("group_name", False) for param in self.params
-        ):
+        if self.variables and not self.call_type == "group":
             for geo in self.geos:
                 for var_group in self.variables:
                     if (
@@ -922,6 +922,7 @@ class CenDatHelper:
 
             _ = self.list_variables()
             self.set_variables()
+            self.call_type = "group"
 
             for geo in self.geos:
                 for i, group in enumerate(self.groups):
@@ -1797,5 +1798,5 @@ class CenDatHelper:
 
             if in_place is False:
                 params_copy = copy.deepcopy(self.params)
-                del self.params
+                self.params = []
                 return CenDatResponse(params_copy)

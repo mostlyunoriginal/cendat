@@ -8,7 +8,7 @@ cdh.set_products()
 # cdh.list_groups(patterns=r"^race")
 cdh.set_groups(["B17001"])
 # cdh.describe_groups()
-# cdh.set_variables("B01001_001E")
+cdh.set_variables(["B17001_001E", "B17001_002E"])
 cdh.set_geos(["050"])
 response = cdh.get_data(
     include_names=True,
@@ -19,7 +19,7 @@ response = cdh.get_data(
             "08",
         ]
     },
-    # in_place=True,
+    in_place=False,
 )
 # df = response.to_polars(destring=True, concat=True)
 df = response.to_gpd(destring=True, join_strategy="inner")
@@ -34,7 +34,7 @@ response.tabulate(
     "B17001_001E",
     where=[
         "B17001_001E > 1_000",
-        "B17001_002E / B17001_001E < 0.01",
+        "B17001_002E / B17001_001E < 0.1",
         "'CDP' not in NAME",
     ],
     weight_var="B17001_001E",
