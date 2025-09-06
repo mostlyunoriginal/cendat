@@ -18,10 +18,14 @@ response = cdh.get_data(
     include_geoids=True,
     include_geometry=True,
     within={"state": ["08", "56"]},
+    in_place=False,
 )
-df = response.to_polars(destring=True, concat=True)
-# df = response.to_gpd(destring=True, join_strategy="inner")
+# df = response.to_polars(destring=True, concat=True)
+df = response.to_gpd(destring=True, join_strategy="inner")
 print(df.head())
+dfp = response.to_polars(destring=True, concat=True)
+print(dfp.head())
+
 
 response.tabulate(
     "NAME",
@@ -48,14 +52,15 @@ response = cdh.get_data(
     within={"state": ["08", "56"]},
 )
 
-# how many counties
-response.tabulate("state", where="B01001_001E > 10_000")
+# how many block groups
+response.tabulate("state", where="B01001_001E > 2_500")
 
-# how many people in those counties
-response.tabulate("state", weight_var="B01001_001E", where="B01001_001E > 10_000")
+# how many people in those block groups
+response.tabulate("state", weight_var="B01001_001E", where="B01001_001E > 2_500")
 
 # ------------------
 
+cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
 cdh.list_products(years=[2022, 2023], patterns="/cps/tobacco")
 cdh.set_products()
 cdh.list_groups()
@@ -75,6 +80,8 @@ response.tabulate(
     weight_div=3,
 )
 
+test = response.to_polars(concat=True, destring=True)
+
 # ------------------
 
 cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
@@ -87,4 +94,12 @@ cdh.set_groups(["PCT23"])
 cdh.set_geos("160")
 response = cdh.get_data(
     within={"state": "08"},
+    include_geometry=True,
+    include_names=True,
+    in_place=False,
 )
+gdf = response.to_gpd(destring=True)
+df = response.to_polars(destring=True, concat=True)
+df2 = response.to_pandas(destring=True, concat=True)
+
+#

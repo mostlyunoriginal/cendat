@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cendat"
-version = "0.7.0a3"
+version = "0.7.0a4"
 authors = [
   { name="G. Lance Couzens", email="lance.couzens@gmail.com" },
 ]

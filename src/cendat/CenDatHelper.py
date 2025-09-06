@@ -7,6 +7,7 @@ from collections import defaultdict
 from typing import List, Union, Tuple, Dict, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .CenDatResponse import CenDatResponse
+from importlib.util import find_spec
 
 
 class CenDatHelper:
@@ -917,8 +918,11 @@ class CenDatHelper:
                 )
                 return
 
+            _ = self.list_variables()
+            self.set_variables()
+
             for geo in self.geos:
-                for group in self.groups:
+                for i, group in enumerate(self.groups):
                     if (
                         geo["product"] == group["product"]
                         and geo["vintage"] == group["vintage"]
@@ -936,6 +940,11 @@ class CenDatHelper:
                                 "group_name": group[
                                     "name"
                                 ],  # Key to identify group call
+                                "names": self.variables[i]["names"],
+                                "labels": self.variables[i]["labels"],
+                                "values": self.variables[i]["values"],
+                                "types": self.variables[i]["types"],
+                                "attributes": self.variables[i]["attributes"],
                                 "url": geo["url"],
                                 "is_microdata": micro_indicators[geo["url"]],
                             }
@@ -1156,13 +1165,16 @@ class CenDatHelper:
         5. Aggregate the resulting GeoDataFrames and attach them to the corresponding
            item in `self.params`.
         """
-        import pandas as pd
-        import geopandas as gpd
+        # This will hold all the individual page-fetching tasks
+        paginated_tasks = []
 
         RECORDS_PER_PAGE = 1000
 
-        # This will hold all the individual page-fetching tasks
-        paginated_tasks = []
+        if not tasks:
+            return
+
+        import pandas as pd
+        import geopandas as gpd
 
         print("ℹ️ Pre-querying for geometry counts to determine pagination...")
         # Step 1 & 2: Concurrently pre-flight requests to get counts and create paginated tasks
@@ -1307,10 +1319,7 @@ class CenDatHelper:
             return CenDatResponse([])
 
         if include_geometry:
-            try:
-                import geopandas as gpd
-                import pandas as pd
-            except ImportError:
+            if find_spec("geopandas") is None or find_spec("pandas") is None:
                 print(
                     "❌ GeoPandas and/or Pandas are not installed. Please install them with 'pip install geopandas pandas'"
                 )
@@ -1524,12 +1533,12 @@ class CenDatHelper:
                 vars_to_get = [f"group({param['group_name']})"]
                 if include_geoids and param["is_microdata"]:
                     print("ℹ️ GEO_ID not valid for microdata - request ignored.")
-                # elif include_geoids:
-                #     vars_to_get.insert(0, "GEO_ID")
+                elif include_geoids:
+                    vars_to_get.insert(0, "GEO_ID")
                 if include_names and param["is_microdata"]:
                     print("ℹ️ NAME not valid for microdata - request ignored.")
-                # elif include_names:
-                #     vars_to_get.insert(0, "NAME")
+                elif include_names:
+                    vars_to_get.insert(0, "NAME")
                 # `include_attributes` is ignored for group calls as it's not applicable.
             else:
                 vars_to_get = param["names"].copy()
@@ -1791,6 +1800,6 @@ class CenDatHelper:
                 for param in self.params:
                     param["data"] = []
                     if "geometry" in param:
-                        param["geometry"] = gpd.GeoDataFrame()
+                        param["geometry"] = []
 
                 return CenDatResponse(params_copy)

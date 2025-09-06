@@ -1,6 +1,7 @@
 import re
 import operator
 import ast
+from collections import defaultdict
 from typing import List, Union, Dict, Optional, Callable
 
 
@@ -161,6 +162,24 @@ class CenDatResponse:
             if not item.get("data"):
                 continue  # Skip if no data was returned for this parameter set
 
+            # Fix for potential duplication of NAME and GEO_ID if user accepts entire group
+            index_map = defaultdict(list)
+            for index, name in enumerate(item["schema"]):
+                index_map[name].append(index)
+
+            removals = set()
+            for indexes in index_map.values():
+                if len(indexes) > 1:
+                    removals.update(indexes[1:])
+
+            item["schema"] = [
+                var for i, var in enumerate(item["schema"]) if i not in removals
+            ]
+            item["data"] = [
+                [datum for i, datum in enumerate(row) if i not in removals]
+                for row in item["data"]
+            ]
+
             if not destring:
                 yield item, item["data"], "row"
             else:
@@ -169,7 +188,7 @@ class CenDatResponse:
                 for row in item["data"]:
                     row_dict = {}
                     # Use schema to ensure all columns are included in the dict
-                    for k, v in zip(item.get("schema", []), row):
+                    for k, v in zip(item["schema"], row):
                         # Check if the column is a variable that should be destringed
                         if isinstance(v, str) and (
                             k in item.get("names", [])
@@ -500,51 +519,27 @@ class CenDatResponse:
                 checker_functions = [self._build_safe_checker(w) for w in where_list]
 
                 dat_filtered = []
-                for item in self._data:
-                    if not item.get("data"):
+                # for item in self._data:
+                for item, processed_data, orient in self._prepare_dataframe_data(
+                    destring=True, _data=None
+                ):
+                    if not processed_data:
                         continue
-
-                    # Convert rows to dicts for filtering
-                    dict_rows = [
-                        dict(zip(item["schema"], row)) for row in item.get("data", [])
-                    ]
-
-                    # Destring values before checking
-                    group_vars = set(
-                        [
-                            var
-                            for var in item["schema"]
-                            if item.get("group_name", "N/A") in var
-                        ]
-                    )
-                    attribute_vars = set(
-                        [
-                            var
-                            for sub in item.get("attributes", [])
-                            for var in sub.split(",")
-                        ]
-                    )
-                    all_variable_names = set(item.get("names", [])).union(
-                        group_vars, attribute_vars
-                    )
-                    for row in dict_rows:
-                        for key, val in row.items():
-                            if key in all_variable_names and isinstance(val, str):
-                                try:
-                                    row[key] = ast.literal_eval(val)
-                                except (ValueError, SyntaxError):
-                                    pass  # Keep as string if it fails
 
                     filtered_rows = [
                         row
-                        for row in dict_rows
+                        for row in processed_data
                         if logic(checker(row) for checker in checker_functions)
                     ]
 
                     if filtered_rows:
-                        # Reconstruct item with filtered data (as dicts)
+                        # Reconstruct item with filtered data
                         new_item = item.copy()
-                        new_item["data"] = filtered_rows
+                        schema = new_item["schema"]
+                        new_item["data"] = [
+                            [row.get(col) for col in schema] for row in filtered_rows
+                        ]
+
                         dat_filtered.append(new_item)
 
             except ValueError as e:
