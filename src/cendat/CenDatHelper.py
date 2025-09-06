@@ -873,7 +873,9 @@ class CenDatHelper:
         }
 
         # Case 1: Variables are set (standard behavior)
-        if self.variables:
+        if self.variables and not all(
+            param.get("group_name", False) for param in self.params
+        ):
             for geo in self.geos:
                 for var_group in self.variables:
                     if (
@@ -937,9 +939,7 @@ class CenDatHelper:
                                 "requires": geo.get("requires"),
                                 "wildcard": geo.get("wildcard"),
                                 "optionalWithWCFor": geo.get("optionalWithWCFor"),
-                                "group_name": group[
-                                    "name"
-                                ],  # Key to identify group call
+                                "group_name": group["name"],
                                 "names": self.variables[i]["names"],
                                 "labels": self.variables[i]["labels"],
                                 "values": self.variables[i]["values"],
@@ -1795,11 +1795,7 @@ class CenDatHelper:
                 # Return an empty response if a master task fails
                 return CenDatResponse([])
 
-            params_copy = copy.deepcopy(self.params)
             if in_place is False:
-                for param in self.params:
-                    param["data"] = []
-                    if "geometry" in param:
-                        param["geometry"] = []
-
+                params_copy = copy.deepcopy(self.params)
+                del self.params
                 return CenDatResponse(params_copy)

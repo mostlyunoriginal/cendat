@@ -520,7 +520,7 @@ class CenDatResponse:
 
                 dat_filtered = []
                 # for item in self._data:
-                for item, processed_data, orient in self._prepare_dataframe_data(
+                for item, processed_data, _ in self._prepare_dataframe_data(
                     destring=True, _data=None
                 ):
                     if not processed_data:
@@ -533,7 +533,6 @@ class CenDatResponse:
                     ]
 
                     if filtered_rows:
-                        # Reconstruct item with filtered data
                         new_item = item.copy()
                         schema = new_item["schema"]
                         new_item["data"] = [

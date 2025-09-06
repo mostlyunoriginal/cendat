@@ -1,7 +1,5 @@
 import os
 from cendat import CenDatHelper
-import polars as pl
-import geopandas as gpd
 
 cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
 
@@ -11,14 +9,17 @@ cdh.set_products()
 cdh.set_groups(["B17001"])
 # cdh.describe_groups()
 # cdh.set_variables("B01001_001E")
-cdh.set_geos(["160"])
+cdh.set_geos(["050"])
 response = cdh.get_data(
-    # in_place=True,
     include_names=True,
     include_geoids=True,
     include_geometry=True,
-    within={"state": ["08", "56"]},
-    in_place=False,
+    within={
+        "state": [
+            "08",
+        ]
+    },
+    # in_place=True,
 )
 # df = response.to_polars(destring=True, concat=True)
 df = response.to_gpd(destring=True, join_strategy="inner")
