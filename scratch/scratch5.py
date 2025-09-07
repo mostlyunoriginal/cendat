@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import os
 from cendat import CenDatHelper
-import contextily as ctx
+
 
 cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
 
@@ -27,9 +27,6 @@ response = cdh.get_data(
 gdf = response.to_gpd(destring=True, join_strategy="inner")
 gdf.loc[gdf["B19013_001E"] == -666666666, "B19013_001E"] = None
 
-gdf = gdf.set_crs(epsg=4326)
-gdf = gdf.to_crs(epsg=3857)
-
 fig, ax = plt.subplots(1, 1, figsize=(11, 8.5))
 
 # Plot the choropleth map
@@ -54,12 +51,6 @@ gdf.plot(
         "hatch": "////",
         "label": "Missing values",
     },
-)
-
-# Customize the plot
-
-ctx.add_basemap(
-    ax, source=ctx.providers.OpenStreetMap.Mapnik, attribution=False, zoom=10, alpha=1
 )
 
 # Customize the plot

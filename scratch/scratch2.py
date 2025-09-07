@@ -24,10 +24,10 @@ def get_tiger_polygons(
         "outFields": fields,
         "outSR": "4326",
         "f": "geojson",
-        "returnGeometry": "true",
+        "returnGeometry": "false",
         "returnCountOnly": "false",
         "resultOffset": 0,
-        "resultRecordCount": 1000,
+        "resultRecordCount": 100000,
         "timeout": 60,
     }
 
@@ -47,9 +47,14 @@ def get_tiger_polygons(
     return gpd.GeoDataFrame()
 
 
-gdf = get_tiger_polygons(
-    layer_id=80,
-    where_clause="STATE='99'",
-    fields="GEOID,NAME",
-    service="TIGERweb/tigerWMS_ACS2023",
+gdfcs = get_tiger_polygons(
+    layer_id=22,
+    where_clause=(
+        "NAME LIKE '%township' OR "
+        "NAME LIKE '%town' OR "
+        "NAME LIKE '%village' OR "
+        "NAME LIKE '%borough'"
+    ),
+    fields="GEOID,NAME,AREALAND,CENTLAT,CENTLON",
+    service="TIGERweb/tigerWMS_ACS2025",
 )
