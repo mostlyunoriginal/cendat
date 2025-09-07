@@ -11,7 +11,7 @@ cdh.list_groups(patterns=r"^median household income")
 cdh.set_groups(["B19013"])
 cdh.describe_groups()
 # cdh.set_variables("B01001_001E")
-cdh.set_geos(["140"])
+cdh.set_geos(["150"])
 response = cdh.get_data(
     # in_place=True,
     include_names=True,
@@ -20,7 +20,7 @@ response = cdh.get_data(
         "state": [
             "08",
         ],
-        "county": "069",
+        "county": ["069", "123", "013"],
     },
 )
 # df = response.to_polars(destring=True, concat=True)
@@ -59,12 +59,12 @@ gdf.plot(
 # Customize the plot
 
 ctx.add_basemap(
-    ax, source=ctx.providers.CartoDB.Positron, attribution=False, zoom="auto"
+    ax, source=ctx.providers.OpenStreetMap.Mapnik, attribution=False, zoom=10, alpha=1
 )
 
 # Customize the plot
 ax.set_title(
-    "Larimer County Med. HH Income by tract",
+    "Larimer, Weld, and Boulder County Med. HH Income by block group",
     fontdict={"fontsize": "20", "fontweight": "3"},
 )
 ax.set_axis_off()
