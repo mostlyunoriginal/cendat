@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 from collections import defaultdict
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 from cendat import CenDatHelper
 import contextily as ctx
@@ -82,45 +83,40 @@ cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
 
 cdh.list_products(years=[2023], patterns=r"acs/acs5\)")
 cdh.set_products()
-cdh.list_groups(patterns=r"^median household income")
-cdh.set_groups(["B19013"])
+cdh.set_groups(["B25014"])
 cdh.describe_groups()
 cdh.set_geos(["150"])
 response = cdh.get_data(
-    # in_place=True,
     include_names=True,
+    include_geoids=True,
     include_geometry=True,
-    within={
-        "state": [
-            "08",
-        ],
-        "county": ["069", "123", "013"],
-    },
+    within={"state": "29", "county": "510"},
+    in_place=False,
 )
 
-
 gdf = response.to_gpd(destring=True, join_strategy="inner")
-gdf.loc[gdf["B19013_001E"] == -666666666, "B19013_001E"] = None
+gdf["outcome"] = gdf["B25014_013E"] / gdf["B25014_001E"] * 100
 
-fig, ax = plt.subplots(1, 1, figsize=(10, 6), dpi=300)
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 8), dpi=150)
 
 # Plot the choropleth map
 gdf.plot(
-    column="B19013_001E",
-    cmap="viridis",
+    column="outcome",
+    cmap="Reds",
     linewidth=0.2,
     edgecolor="black",
     ax=ax,
     legend=True,
-    alpha=0.8,
+    alpha=0.4,
     legend_kwds={
-        "label": "Income",
+        "label": "Percent of Homes with more than 2 Renters per Room",
         "orientation": "horizontal",
         "location": "bottom",
         "shrink": 0.5,
         "fraction": 0.1,
-        "format": "{x:,.0f}",
-        "alpha": 0.8,
+        "format": "{x:.1f}",
+        "alpha": 0.4,
         "pad": 0.1,
     },
     missing_kwds={
@@ -139,7 +135,7 @@ visible_centroids = stacked[
     & (stacked["CENTLON"] <= xmax)
     & (stacked["CENTLAT"] >= ymin)
     & (stacked["CENTLAT"] <= ymax)
-    & (stacked["DECILE"] >= 19)
+    & (stacked["DECILE"] >= 21)
 ]
 
 ax.scatter(
@@ -172,17 +168,34 @@ for idx, row in visible_centroids.iterrows():
         ),
     )
 
+# ctx.add_basemap(
+#     ax,
+#     source=ctx.providers.CartoDB.PositronNoLabels,
+#     attribution=False,
+#     zoom=13,
+#     crs=4326,
+#     alpha=1.0,
+# )
+# ctx.add_basemap(
+#     ax,
+#     source=ctx.providers.CartoDB.PositronOnlyLabels,
+#     attribution=False,
+#     zoom=15,
+#     crs=4326,
+#     alpha=1.0,
+# )
+
 ctx.add_basemap(
     ax,
-    source=ctx.providers.CartoDB.PositronNoLabels,
+    source=ctx.providers.OpenStreetMap.Mapnik,
     attribution=False,
-    zoom=10,
+    zoom=13,
     crs=4326,
     alpha=1.0,
 )
 
 ax.set_title(
-    "Larimer, Weld, and Boulder County Med. HH Income by block group",
+    "St. Louis, MO",
     fontdict={"fontsize": "16", "fontweight": "3"},
 )
 ax.set_axis_off()

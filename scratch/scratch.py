@@ -104,3 +104,18 @@ df = response.to_polars(destring=True, concat=True)
 df2 = response.to_pandas(destring=True, concat=True)
 
 #
+
+cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
+
+cdh.list_products(years=[2023], patterns=r"acs/acs5\)")
+cdh.set_products()
+cdh.set_groups(["B25014"])
+cdh.describe_groups()
+cdh.set_geos(["150"])
+response = cdh.get_data(
+    include_names=True,
+    include_geoids=True,
+    include_geometry=True,
+    within={"state": "29", "county": "189"},
+    in_place=False,
+)
