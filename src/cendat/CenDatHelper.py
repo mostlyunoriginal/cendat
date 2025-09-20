@@ -1149,6 +1149,7 @@ class CenDatHelper:
         tasks: List[Dict],
         max_workers: Optional[int] = None,
         timeout: Optional[int] = None,
+        verbose: bool = False,
     ):
         """
         Takes TIGERweb tasks, handles pagination, and fetches geometries in a thread pool.
@@ -1177,7 +1178,9 @@ class CenDatHelper:
         import pandas as pd
         import geopandas as gpd
 
-        print("ℹ️ Pre-querying for geometry counts to determine pagination...")
+        if verbose:
+            print("ℹ️ Pre-querying for geometry counts to determine pagination...")
+
         # Step 1 & 2: Concurrently pre-flight requests to get counts and create paginated tasks
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_task = {
@@ -1199,14 +1202,16 @@ class CenDatHelper:
                     total_records = future.result()
 
                     if total_records == 0:
-                        print(
-                            f"  - No geometries found for WHERE '{where_clause[:50]}...'. Skipping."
-                        )
+                        if verbose:
+                            print(
+                                f"  - No geometries found for WHERE '{where_clause[:60]}...'. Skipping."
+                            )
                         continue
 
-                    print(
-                        f"  - Found {total_records} geometries for WHERE '{where_clause[:50]}...'. Building paginated tasks."
-                    )
+                    if verbose:
+                        print(
+                            f"  - Found {total_records} geometries for WHERE '{where_clause[:60]}...'. Building paginated tasks."
+                        )
 
                     # Step 3: Create sub-tasks for each page
                     for offset in range(0, total_records, RECORDS_PER_PAGE):
@@ -1226,14 +1231,19 @@ class CenDatHelper:
                     )
 
         if not paginated_tasks:
-            print("ℹ️ No paginated geometry tasks to execute.")
+            if verbose:
+                print("ℹ️ No paginated geometry tasks to execute.")
             return
 
         # Dictionary to aggregate GDFs for each original param
         results_aggregator = defaultdict(list)
 
         # Step 4: Execute all paginated tasks concurrently
-        print(f"ℹ️ Fetching geometries across {len(paginated_tasks)} paginated calls...")
+        if verbose:
+            print(
+                f"ℹ️ Fetching geometries across {len(paginated_tasks)} paginated calls..."
+            )
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_context = {
                 executor.submit(
@@ -1279,6 +1289,7 @@ class CenDatHelper:
         include_attributes: bool = False,
         include_geometry: bool = False,
         in_place: bool = False,
+        verbose: bool = False,
     ) -> "CenDatResponse":
         """
         Retrieves data from the Census API based on the set parameters.
@@ -1417,7 +1428,8 @@ class CenDatHelper:
                     for item in response.json()["services"]
                     if re.search(r"ACS|Census|Current", item["name"])
                 ]
-                print("✅ Successfully fetched map servers.")
+                if verbose:
+                    print("✅ Successfully fetched map servers.")
 
             except requests.exceptions.RequestException as e:
                 print(f"❌ HTTP Request failed: {e}")
@@ -1524,7 +1536,8 @@ class CenDatHelper:
                             for item in response.json()["layers"]
                             if item["name"] in valid_sumlevs_geometry[param["sumlev"]]
                         ]
-                        print("✅ Successfully fetched map server layers.")
+                        if verbose:
+                            print("✅ Successfully fetched map server layers.")
 
                     except requests.exceptions.RequestException as e:
                         print(f"❌ HTTP Request failed: {e}")
@@ -1692,7 +1705,10 @@ class CenDatHelper:
                     # If there are levels that need discovery, call the recursive helper.
                     combinations = []
                     if geos_to_fetch:
-                        print(f"ℹ️ Discovering parent geographies for: {geos_to_fetch}")
+                        if verbose:
+                            print(
+                                f"ℹ️ Discovering parent geographies for: {geos_to_fetch}"
+                            )
                         resolved_parents = {
                             k: v
                             for k, v in final_in_clause.items()
@@ -1708,7 +1724,7 @@ class CenDatHelper:
                     else:
                         combinations = [final_in_clause]
 
-                    if combinations:
+                    if combinations and verbose:
                         print(
                             f"✅ Found {len(combinations)} combinations. Building API queries..."
                         )
@@ -1774,13 +1790,18 @@ class CenDatHelper:
             return CenDatResponse([])
 
         else:
-            print(f"ℹ️ Making {self.n_calls} API call(s)...")
+            if verbose:
+                print(f"ℹ️ Making {self.n_calls} API call(s)...")
             # Execute all API calls concurrently.
             try:
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     # Submit the two master jobs for data and geometry fetching.
                     future_geo = executor.submit(
-                        self._geometry_fetching, geo_tasks, max_workers, timeout
+                        self._geometry_fetching,
+                        geo_tasks,
+                        max_workers,
+                        timeout,
+                        verbose,
                     )
                     future_data = executor.submit(
                         self._data_fetching, data_tasks, max_workers, timeout
