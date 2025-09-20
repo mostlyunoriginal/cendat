@@ -24,10 +24,10 @@ def get_tiger_polygons(
         "outFields": fields,
         "outSR": "4326",
         "f": "geojson",
-        "returnGeometry": "true",
+        "returnGeometry": "false",
         "returnCountOnly": "false",
         "resultOffset": 0,
-        "resultRecordCount": 1_000,
+        "resultRecordCount": 100000,
         "timeout": 60,
     }
 
@@ -47,12 +47,14 @@ def get_tiger_polygons(
     return gpd.GeoDataFrame()
 
 
-# --- Example Usage ---
-# Fetching counties in Colorado (layer 82) with only specific fields
-
-colorado_gdf = get_tiger_polygons(
-    layer_id=8,
-    where_clause="STATE = '08'",
-    fields="GEOID,NAME",  # Only request these three attribute fields
-    service="TIGERweb/tigerWMS_Census2020",
+gdfcs = get_tiger_polygons(
+    layer_id=22,
+    where_clause=(
+        "NAME LIKE '%township' OR "
+        "NAME LIKE '%town' OR "
+        "NAME LIKE '%village' OR "
+        "NAME LIKE '%borough'"
+    ),
+    fields="GEOID,NAME,AREALAND,CENTLAT,CENTLON",
+    service="TIGERweb/tigerWMS_ACS2025",
 )

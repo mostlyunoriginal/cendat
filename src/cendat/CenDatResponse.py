@@ -1,6 +1,7 @@
 import re
 import operator
 import ast
+from collections import defaultdict
 from typing import List, Union, Dict, Optional, Callable
 
 
@@ -161,6 +162,24 @@ class CenDatResponse:
             if not item.get("data"):
                 continue  # Skip if no data was returned for this parameter set
 
+            # Fix for potential duplication of NAME and GEO_ID if user accepts entire group
+            index_map = defaultdict(list)
+            for index, name in enumerate(item["schema"]):
+                index_map[name].append(index)
+
+            removals = set()
+            for indexes in index_map.values():
+                if len(indexes) > 1:
+                    removals.update(indexes[1:])
+
+            item["schema"] = [
+                var for i, var in enumerate(item["schema"]) if i not in removals
+            ]
+            item["data"] = [
+                [datum for i, datum in enumerate(row) if i not in removals]
+                for row in item["data"]
+            ]
+
             if not destring:
                 yield item, item["data"], "row"
             else:
@@ -169,7 +188,7 @@ class CenDatResponse:
                 for row in item["data"]:
                     row_dict = {}
                     # Use schema to ensure all columns are included in the dict
-                    for k, v in zip(item.get("schema", []), row):
+                    for k, v in zip(item["schema"], row):
                         # Check if the column is a variable that should be destringed
                         if isinstance(v, str) and (
                             k in item.get("names", [])
@@ -237,6 +256,7 @@ class CenDatResponse:
                 schema=item["schema"],
                 orient=orient,
                 schema_overrides=schema_overrides,
+                infer_schema_length=None,
             )
 
             # Add context columns
@@ -316,6 +336,96 @@ class CenDatResponse:
             return []
 
         return pd.concat(dataframes, ignore_index=True) if concat else dataframes
+
+    def to_gpd(
+        self,
+        dtypes: Optional[Dict] = None,
+        destring: bool = False,
+        join_strategy: str = "left",
+    ) -> "gpd.GeoDataFrame":
+        """
+        Converts the response data into a GeoPandas GeoDataFrame with geometries.
+
+        This method first converts the tabular data to Pandas DataFrames, then
+        joins them with the corresponding geometry data fetched via the
+        `include_geometry=True` flag in `CenDatHelper.get_data()`.
+
+        Args:
+            destring (bool): If True, attempts to convert string representations
+                of numbers into native numeric types. Passed to `to_pandas`.
+                Defaults to False.
+            join_strategy (str): The type of join to perform between the data
+                and the geometries. Must be 'left' (default) or 'inner'.
+                - 'left': Keeps all records from the data, adding geometry where available.
+                - 'inner': Keeps only records that exist in both data and geometry sets.
+
+        Returns:
+            gpd.GeoDataFrame: A single, concatenated GeoDataFrame containing both
+            the tabular data and the geographic shapes. Returns an empty
+            GeoDataFrame if GeoPandas is not installed or no data is available.
+        """
+        try:
+            import geopandas as gpd
+            import pandas as pd
+        except ImportError:
+            print(
+                "❌ GeoPandas and/or Pandas are not installed. Please install them with 'pip install geopandas pandas'"
+            )
+            return []
+
+        if join_strategy not in ["left", "inner"]:
+            raise ValueError("`join_strategy` must be either 'left' or 'inner'")
+
+        geodataframes = []
+        for item, processed_data, orient in self._prepare_dataframe_data(
+            destring, _data=None
+        ):
+            # Create the base pandas DataFrame
+            df = pd.DataFrame(
+                processed_data, columns=item["schema"] if orient == "row" else None
+            )
+            df["GEOID"] = df["GEO_ID"].str[9:]
+
+            if dtypes:
+                df = df.astype(dtypes, errors="ignore")
+
+            geometry_gdf = item.get("geometry")
+
+            # Proceed only if geometry data is available for this item
+            if geometry_gdf is not None and not geometry_gdf.empty:
+                if "GEO_ID" not in df.columns or "GEOID" not in geometry_gdf.columns:
+                    print(
+                        f"⚠️ Warning: 'GEO_ID' (for data) or 'GEOID' (for geometry) column not found for product '{item['product']}'. Cannot join. "
+                        "Try re-running get_data() with include_geoids=True."
+                    )
+                    continue
+
+                # To prevent column clashes (e.g., NAME_x, NAME_y), only use essential columns from the geometry GDF
+                geo_subset = geometry_gdf[["GEOID", "geometry"]]
+
+                # Merge the tabular data with the geometry data, specifying the different key names
+                merged_df = df.merge(geo_subset, on="GEOID", how=join_strategy)
+
+                # Convert the merged result into a GeoDataFrame
+                gdf = gpd.GeoDataFrame(merged_df, geometry="geometry")
+
+                # Add context columns
+                gdf["product"] = item["product"]
+                gdf["vintage"] = item["vintage"][0]
+                gdf["vintage"] = gdf["vintage"].astype("string")
+                gdf["sumlev"] = item["sumlev"]
+                gdf["desc"] = item["desc"]
+
+                geodataframes.append(gdf)
+            else:
+                print(
+                    f"ℹ️ No geometry found for product '{item['product']}'. Skipping this item for GeoDataFrame conversion."
+                )
+
+        if not geodataframes:
+            return gpd.GeoDataFrame()
+
+        return pd.concat(geodataframes, ignore_index=True)
 
     def tabulate(
         self,
@@ -409,51 +519,26 @@ class CenDatResponse:
                 checker_functions = [self._build_safe_checker(w) for w in where_list]
 
                 dat_filtered = []
-                for item in self._data:
-                    if not item.get("data"):
+                # for item in self._data:
+                for item, processed_data, _ in self._prepare_dataframe_data(
+                    destring=True, _data=None
+                ):
+                    if not processed_data:
                         continue
-
-                    # Convert rows to dicts for filtering
-                    dict_rows = [
-                        dict(zip(item["schema"], row)) for row in item.get("data", [])
-                    ]
-
-                    # Destring values before checking
-                    group_vars = set(
-                        [
-                            var
-                            for var in item["schema"]
-                            if item.get("group_name", "N/A") in var
-                        ]
-                    )
-                    attribute_vars = set(
-                        [
-                            var
-                            for sub in item.get("attributes", [])
-                            for var in sub.split(",")
-                        ]
-                    )
-                    all_variable_names = set(item.get("names", [])).union(
-                        group_vars, attribute_vars
-                    )
-                    for row in dict_rows:
-                        for key, val in row.items():
-                            if key in all_variable_names and isinstance(val, str):
-                                try:
-                                    row[key] = ast.literal_eval(val)
-                                except (ValueError, SyntaxError):
-                                    pass  # Keep as string if it fails
 
                     filtered_rows = [
                         row
-                        for row in dict_rows
+                        for row in processed_data
                         if logic(checker(row) for checker in checker_functions)
                     ]
 
                     if filtered_rows:
-                        # Reconstruct item with filtered data (as dicts)
                         new_item = item.copy()
-                        new_item["data"] = filtered_rows
+                        schema = new_item["schema"]
+                        new_item["data"] = [
+                            [row.get(col) for col in schema] for row in filtered_rows
+                        ]
+
                         dat_filtered.append(new_item)
 
             except ValueError as e:

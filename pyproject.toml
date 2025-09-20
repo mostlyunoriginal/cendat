@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cendat"
-version = "0.6.0"
+version = "0.7.0"
 authors = [
   { name="G. Lance Couzens", email="lance.couzens@gmail.com" },
 ]
@@ -30,4 +30,6 @@ dependencies = [
 [project.optional-dependencies]
 pandas = ["pandas"]
 polars = ["polars"]
-all = ["pandas", "polars"]
+geopandas = ["geopandas"]
+
+all = ["pandas", "polars", "geopandas"]

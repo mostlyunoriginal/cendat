@@ -1,19 +1,27 @@
-import re
-import requests
+from collections import defaultdict
 
-url = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb?f=pjson"
+schema = ["zero", "one", "two", "three", "two", "four", "five", "one", "six"]
 
-try:
-    response = requests.get(url)
-    response.raise_for_status()
-    map_servers = [
-        item["name"]
-        for item in response.json()["services"]
-        if re.search(r"ACS|Census|Current", item["name"])
-    ]
-    print(f"✅ Successfully fetched map servers.")
+data = [
+    [0, 1, 2, 3, 2, 4, 5, 1, 6],
+    [0, 1, 2, 3, 2, 4, 5, 1, 6],
+    [0, 1, 2, 3, 2, 4, 5, 1, 6],
+]
 
-except requests.exceptions.RequestException as e:
-    print(f"❌ HTTP Request failed: {e}")
+index_map = defaultdict(list)
+for index, name in enumerate(schema):
+    index_map[name].append(index)
 
-print(map_servers)
+removals = set()
+for indexes in index_map.values():
+    if len(indexes) > 1:
+        removals.update(indexes[1:])
+
+new_schema = [var for i, var in enumerate(schema) if i not in removals]
+new_data = [[datum for i, datum in enumerate(row) if i not in removals] for row in data]
+
+print(f"{schema=}")
+print(f"{index_map=}")
+print(f"{removals=}")
+print(f"{new_schema=}")
+print(f"{new_data=}")

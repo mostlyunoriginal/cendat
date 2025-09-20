@@ -2,10 +2,12 @@ import re
 import requests
 import itertools
 import builtins
+import copy
 from collections import defaultdict
-from typing import List, Union, Dict, Optional, Callable
+from typing import List, Union, Tuple, Dict, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .CenDatResponse import CenDatResponse
+from importlib.util import find_spec
 
 
 class CenDatHelper:
@@ -51,6 +53,7 @@ class CenDatHelper:
         self._filtered_groups_cache: Optional[List[Dict]] = None
         self._filtered_variables_cache: Optional[List[Dict]] = None
         self.n_calls: Optional[int] = None
+        self.call_type: Optional[str] = None
 
         if years is not None:
             self.set_years(years)
@@ -337,10 +340,15 @@ class CenDatHelper:
                     )
                     continue
                 prods_to_set.extend(matching_products)
-        self.products = []
+
         if not prods_to_set:
             print("❌ Error: No valid products were found to set.")
             return
+
+        self.products = []
+        self.groups = []
+        self.variables = []
+        self.geos = []
         for product in prods_to_set:
             product["base_url"] = product.get("url", "")
             self.products.append(product)
@@ -833,6 +841,7 @@ class CenDatHelper:
             ):
                 collapsed_vars[key][collapsed].append(var_info[granular])
         self.variables = list(collapsed_vars.values())
+        self.call_type = "variable"
         print("✅ Variables set:")
         for var_group in self.variables:
             print(
@@ -866,7 +875,7 @@ class CenDatHelper:
         }
 
         # Case 1: Variables are set (standard behavior)
-        if self.variables:
+        if self.variables and not self.call_type == "group":
             for geo in self.geos:
                 for var_group in self.variables:
                     if (
@@ -911,8 +920,12 @@ class CenDatHelper:
                 )
                 return
 
+            _ = self.list_variables()
+            self.set_variables()
+            self.call_type = "group"
+
             for geo in self.geos:
-                for group in self.groups:
+                for i, group in enumerate(self.groups):
                     if (
                         geo["product"] == group["product"]
                         and geo["vintage"] == group["vintage"]
@@ -927,9 +940,12 @@ class CenDatHelper:
                                 "requires": geo.get("requires"),
                                 "wildcard": geo.get("wildcard"),
                                 "optionalWithWCFor": geo.get("optionalWithWCFor"),
-                                "group_name": group[
-                                    "name"
-                                ],  # Key to identify group call
+                                "group_name": group["name"],
+                                "names": self.variables[i]["names"],
+                                "labels": self.variables[i]["labels"],
+                                "values": self.variables[i]["values"],
+                                "types": self.variables[i]["types"],
+                                "attributes": self.variables[i]["attributes"],
                                 "url": geo["url"],
                                 "is_microdata": micro_indicators[geo["url"]],
                             }
@@ -1025,6 +1041,243 @@ class CenDatHelper:
                 all_combinations.extend(future.result())
         return all_combinations
 
+    def _get_gdf_from_url(
+        self,
+        layer_id: int,
+        where_clause: str,
+        service: str = "TIGERweb/tigerWMS_Current",
+        timeout: int = None,
+        offset: int = None,
+        n_records: int = None,
+        count_only: bool = False,
+    ) -> Union["gpd.GeoDataFrame", int]:
+        """
+        Fetches geographic polygons or a feature count from the US Census TIGERweb REST API.
+
+        Args:
+            layer_id (int): The numeric ID for the desired geography layer.
+            where_clause (str): An SQL-like clause to filter the geographies.
+            service (str): The name of the TIGERweb map service to query.
+            timeout (int, optional): Request timeout in seconds.
+            offset (int, optional): The starting record offset for pagination.
+            n_records (int, optional): The number of records to return per page.
+            count_only (bool): If True, returns only the count of matching records.
+
+        Returns:
+            If count_only is True, returns an integer count. Otherwise, returns
+            a GeoDataFrame with the requested geometries.
+        """
+        import geopandas as gpd
+
+        API_URL = f"https://tigerweb.geo.census.gov/arcgis/rest/services/{service}/MapServer/{layer_id}/query"
+
+        params = {
+            "where": where_clause,
+            "outFields": "GEOID,NAME",
+            "outSR": "4326",
+            "f": "geojson",
+            "returnGeometry": "true" if not count_only else "false",
+            "returnCountOnly": str(count_only).lower(),
+            "resultOffset": offset,
+            "resultRecordCount": n_records,
+            "timeout": timeout,
+        }
+        # Filter out None values before making the request
+        params = {k: v for k, v in params.items() if v is not None}
+
+        try:
+            response = requests.get(API_URL, params=params)
+            response.raise_for_status()
+            json_response = response.json()
+
+            if count_only:
+                return json_response.get("count", 0)
+
+            return gpd.GeoDataFrame.from_features(json_response["features"])
+
+        except requests.exceptions.RequestException as e:
+            print(f"❌ HTTP Request failed: {e}")
+        except (KeyError, ValueError) as e:
+            print(f"❌ Failed to parse response JSON: {e}")
+            print(f"   Server Response: {response.text[:200]}...")
+
+        return gpd.GeoDataFrame() if not count_only else 0
+
+    def _data_fetching(
+        self,
+        tasks: List[Tuple[str, Dict, Dict]] = None,
+        max_workers: Optional[int] = None,
+        timeout: Optional[int] = None,
+    ):
+        """Takes data API tasks and runs them in a thread pool."""
+
+        results_aggregator = {
+            i: {"schema": None, "data": []} for i in range(len(self.params))
+        }
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_context = {
+                executor.submit(self._get_json_from_url, url, params, timeout): context
+                for url, params, context in tasks
+            }
+            for future in as_completed(future_to_context):
+                # As each call completes, aggregate its results.
+                context = future_to_context[future]
+                param_index = context["param_index"]
+                try:
+                    data = future.result()
+                    if data and len(data) > 1:
+                        if results_aggregator[param_index]["schema"] is None:
+                            results_aggregator[param_index]["schema"] = data[0]
+                        results_aggregator[param_index]["data"].extend(data[1:])
+                except Exception as exc:
+                    print(f"❌ Task for {context} generated an exception: {exc}")
+
+        # After all tasks are complete, attach the aggregated data to self.params
+        print("✅ Data fetching complete. Stacking results.")
+        for i, param in enumerate(self.params):
+            aggregated_result = results_aggregator[i]
+            if aggregated_result["schema"]:
+                param["schema"] = aggregated_result["schema"]
+                param["data"] = aggregated_result["data"]
+            else:
+                # Ensure 'data' key exists, even if empty, for downstream consistency.
+                param["data"] = []
+
+    def _geometry_fetching(
+        self,
+        tasks: List[Dict],
+        max_workers: Optional[int] = None,
+        timeout: Optional[int] = None,
+        verbose: bool = False,
+    ):
+        """
+        Takes TIGERweb tasks, handles pagination, and fetches geometries in a thread pool.
+
+        This method uses an iterative approach for pagination to avoid Python's
+        recursion depth limits, which is safer for queries that could return
+        many thousands of features.
+
+        Strategy:
+        1. For each initial task, make a pre-flight request to get the total count
+           of geometries. These requests are run concurrently.
+        2. Based on the count, calculate how many paginated requests are needed.
+        3. Create a list of all sub-tasks (one for each page).
+        4. Execute all sub-tasks concurrently in a thread pool.
+        5. Aggregate the resulting GeoDataFrames and attach them to the corresponding
+           item in `self.params`.
+        """
+        # This will hold all the individual page-fetching tasks
+        paginated_tasks = []
+
+        RECORDS_PER_PAGE = 1000
+
+        if not tasks:
+            return
+
+        import pandas as pd
+        import geopandas as gpd
+
+        if verbose:
+            print("ℹ️ Pre-querying for geometry counts to determine pagination...")
+
+        # Step 1 & 2: Concurrently pre-flight requests to get counts and create paginated tasks
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_task = {
+                executor.submit(
+                    self._get_gdf_from_url,
+                    layer_id=task["layer_id"],
+                    where_clause=task["where_clause"],
+                    service=task["map_server"],
+                    timeout=timeout,
+                    count_only=True,
+                ): task
+                for task in tasks
+            }
+
+            for future in as_completed(future_to_task):
+                task = future_to_task[future]
+                where_clause = task["where_clause"]
+                try:
+                    total_records = future.result()
+
+                    if total_records == 0:
+                        if verbose:
+                            print(
+                                f"  - No geometries found for WHERE '{where_clause[:60]}...'. Skipping."
+                            )
+                        continue
+
+                    if verbose:
+                        print(
+                            f"  - Found {total_records} geometries for WHERE '{where_clause[:60]}...'. Building paginated tasks."
+                        )
+
+                    # Step 3: Create sub-tasks for each page
+                    for offset in range(0, total_records, RECORDS_PER_PAGE):
+                        paginated_tasks.append(
+                            {
+                                "param_index": task["param_index"],
+                                "layer_id": task["layer_id"],
+                                "where_clause": where_clause,
+                                "service": task["map_server"],
+                                "offset": offset,
+                                "n_records": RECORDS_PER_PAGE,
+                            }
+                        )
+                except Exception as exc:
+                    print(
+                        f"❌ Failed during geometry count pre-flight for {where_clause}: {exc}"
+                    )
+
+        if not paginated_tasks:
+            if verbose:
+                print("ℹ️ No paginated geometry tasks to execute.")
+            return
+
+        # Dictionary to aggregate GDFs for each original param
+        results_aggregator = defaultdict(list)
+
+        # Step 4: Execute all paginated tasks concurrently
+        if verbose:
+            print(
+                f"ℹ️ Fetching geometries across {len(paginated_tasks)} paginated calls..."
+            )
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_context = {
+                executor.submit(
+                    self._get_gdf_from_url,
+                    layer_id=p_task["layer_id"],
+                    where_clause=p_task["where_clause"],
+                    service=p_task["service"],
+                    timeout=timeout,
+                    offset=p_task["offset"],
+                    n_records=p_task["n_records"],
+                ): p_task
+                for p_task in paginated_tasks
+            }
+
+            for future in as_completed(future_to_context):
+                context = future_to_context[future]
+                param_index = context["param_index"]
+                try:
+                    gdf = future.result()
+                    if not gdf.empty:
+                        results_aggregator[param_index].append(gdf)
+                except Exception as exc:
+                    print(f"❌ Geometry fetch task failed for {context}: {exc}")
+
+        # Step 5: Concatenate GDFs and attach to self.params
+        print("✅ Geometry fetching complete. Stacking results.")
+        for i, param in enumerate(self.params):
+            if i in results_aggregator:
+                # Concatenate all the GeoDataFrame pages into a single one
+                combined_gdf = pd.concat(results_aggregator[i], ignore_index=True)
+                param["geometry"] = gpd.GeoDataFrame(combined_gdf)
+            else:
+                param["geometry"] = gpd.GeoDataFrame()
+
     def get_data(
         self,
         within: Union[str, Dict, List[Dict]] = "us",
@@ -1034,6 +1287,9 @@ class CenDatHelper:
         include_names: bool = False,
         include_geoids: bool = False,
         include_attributes: bool = False,
+        include_geometry: bool = False,
+        in_place: bool = False,
+        verbose: bool = False,
     ) -> "CenDatResponse":
         """
         Retrieves data from the Census API based on the set parameters.
@@ -1074,12 +1330,133 @@ class CenDatHelper:
             )
             return CenDatResponse([])
 
-        results_aggregator = {
-            i: {"schema": None, "data": []} for i in range(len(self.params))
-        }
-        all_tasks = []
+        if include_geometry:
+            if find_spec("geopandas") is None or find_spec("pandas") is None:
+                print(
+                    "❌ GeoPandas and/or Pandas are not installed. Please install them with 'pip install geopandas pandas'"
+                )
+                return CenDatResponse([])
+
+            include_geoids = True
+
+            valid_sumlevs_geometry = {
+                "020": ["Census Regions"],
+                "030": ["Census Divisions"],
+                "040": ["States"],
+                "050": ["Counties"],
+                "060": ["County Subdivisions"],
+                "140": ["Census Tracts"],
+                "150": ["Census Block Groups"],
+                "160": ["Incorporated Places", "Census Designated Places"],
+            }
+
+            desc_map = {
+                "region": "REGION",
+                "division": "DIVISION",
+                "state": "STATE",
+                "county": "COUNTY",
+                "county subdivision": "COUSUB",
+                "tract": "TRACT",
+                "block group": "BLKGRP",
+                "place": "PLACE",
+            }
+
+            state_codes = {
+                "WA": "53",
+                "DE": "10",
+                "DC": "11",
+                "WI": "55",
+                "WV": "54",
+                "HI": "15",
+                "FL": "12",
+                "WY": "56",
+                "PR": "72",
+                "NJ": "34",
+                "NM": "35",
+                "TX": "48",
+                "LA": "22",
+                "NC": "37",
+                "ND": "38",
+                "NE": "31",
+                "TN": "47",
+                "NY": "36",
+                "PA": "42",
+                "AK": "02",
+                "NV": "32",
+                "NH": "33",
+                "VA": "51",
+                "CO": "08",
+                "CA": "06",
+                "AL": "01",
+                "AR": "05",
+                "VT": "50",
+                "IL": "17",
+                "GA": "13",
+                "IN": "18",
+                "IA": "19",
+                "MA": "25",
+                "AZ": "04",
+                "ID": "16",
+                "CT": "09",
+                "ME": "23",
+                "MD": "24",
+                "OK": "40",
+                "OH": "39",
+                "UT": "49",
+                "MO": "29",
+                "MN": "27",
+                "MI": "26",
+                "RI": "44",
+                "KS": "20",
+                "MT": "30",
+                "MS": "28",
+                "SC": "45",
+                "KY": "21",
+                "OR": "41",
+                "SD": "46",
+            }
+
+            url = (
+                "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb?f=pjson"
+            )
+
+            try:
+                response = requests.get(url)
+                response.raise_for_status()
+                map_servers = [
+                    item["name"]
+                    for item in response.json()["services"]
+                    if re.search(r"ACS|Census|Current", item["name"])
+                ]
+                if verbose:
+                    print("✅ Successfully fetched map servers.")
+
+            except requests.exceptions.RequestException as e:
+                print(f"❌ HTTP Request failed: {e}")
+
+            # Helper function to correctly format TIGERweb SQL WHERE clauses,
+            # handling both single values and lists of values.
+            def format_sql_in_clause(key, value):
+                # Map the user-facing geo name (e.g., 'state') to the TIGERweb field name (e.g., 'STATE')
+                field = desc_map[key]
+                if isinstance(value, list):
+                    # For a list, create a comma-separated, quoted string: "'val1','val2'"
+                    values_str = ",".join(f"'{item}'" for item in value)
+                    return f"{field} IN ({values_str})"
+                else:
+                    # For a single value, just wrap it in quotes
+                    return f"{field} IN ('{value}')"
+
+        data_tasks = []
+        geo_tasks = []
 
         raw_within_clauses = within if isinstance(within, list) else [within]
+        if (
+            include_geometry
+            and raw_within_clauses in [[], ["us"]]
+            and any(param["sumlev"] == "040" for param in self.params)
+        ):
+            raw_within_clauses = [{"state": list(state_codes.values())}]
 
         # Expand the `within` clauses. If a user provides a list of codes for a
         # geography (e.g., `{'state': '08', 'county': ['001', '005']}`), this
@@ -1114,6 +1491,56 @@ class CenDatHelper:
             )
             if not product_info:
                 continue
+
+            if include_geometry:
+                skip_geometry = False
+                if (
+                    product_info["type"].split("/")[0] == "dec"
+                    and product_info["vintage"][0] >= 2010
+                ):
+                    map_server = f"TIGERweb/tigerWMS_Census{product_info['vintage'][0]}"
+                elif product_info["type"].split("/")[0] == "acs":
+                    if (
+                        product_info["vintage"][0] >= 2012
+                        and product_info["vintage"][0] != 2020
+                    ):
+                        map_server = (
+                            f"TIGERweb/tigerWMS_ACS{product_info['vintage'][0]}"
+                        )
+                    elif product_info["vintage"][0] >= 2012:
+                        map_server = "TIGERweb/tigerWMS_Census2020"
+                    else:
+                        map_server = "TIGERweb/tigerWMS_Census2010"
+                else:
+                    map_server = "TIGERweb/tigerWMS_Current"
+
+                if map_server not in map_servers:
+                    skip_geometry = True
+                    print(
+                        f"❌ Error: the requested map server '{map_server}' is not available."
+                    )
+                if param["sumlev"] not in valid_sumlevs_geometry.keys():
+                    skip_geometry = True
+                    print(
+                        f"❌ Error: the requested summary level ({param['sumlev']}) is currently supported for geometry."
+                    )
+                if not skip_geometry:
+                    url = f"https://tigerweb.geo.census.gov/arcgis/rest/services/{map_server}/MapServer?f=pjson"
+
+                    try:
+                        response = requests.get(url)
+                        response.raise_for_status()
+
+                        map_server_layers = [
+                            item["id"]
+                            for item in response.json()["layers"]
+                            if item["name"] in valid_sumlevs_geometry[param["sumlev"]]
+                        ]
+                        if verbose:
+                            print("✅ Successfully fetched map server layers.")
+
+                    except requests.exceptions.RequestException as e:
+                        print(f"❌ HTTP Request failed: {e}")
 
             # Conditionally build the 'get' parameter string based on call type
             if "group_name" in param:  # This is a group-based call, not variable-based
@@ -1167,6 +1594,9 @@ class CenDatHelper:
                         )
                         continue
 
+                    if include_geometry:
+                        print("ℹ️ Geometry not valid for microdata - request ignored.")
+
                     within_copy = within_clause.copy()
                     target_geo_codes = within_copy.pop(target_geo, None)
 
@@ -1190,7 +1620,7 @@ class CenDatHelper:
                         api_params["in"] = " ".join(
                             [f"{k}:{v}" for k, v in within_copy.items()]
                         )
-                    all_tasks.append((vintage_url, api_params, context))
+                    data_tasks.append((vintage_url, api_params, context))
 
                 # --- Aggregate Data Path ---
                 # This path is more complex as it needs to handle geographic hierarchies.
@@ -1198,7 +1628,6 @@ class CenDatHelper:
                     required_geos = param.get("requires") or []
                     provided_parent_geos = {}
                     target_geo_codes = None
-
                     # If `within` is a dictionary, parse out the target geography codes
                     # and any provided parent geographies.
                     if isinstance(within_clause, builtins.dict):
@@ -1224,7 +1653,23 @@ class CenDatHelper:
                             api_params["in"] = " ".join(
                                 [f"{k}:{v}" for k, v in provided_parent_geos.items()]
                             )
-                        all_tasks.append((vintage_url, api_params, context))
+                        data_tasks.append((vintage_url, api_params, context))
+                        if include_geometry and not skip_geometry:
+                            geo_params = [
+                                {
+                                    "param_index": i,
+                                    "map_server": map_server,
+                                    "layer_id": map_server_layer,
+                                    "where_clause": " AND ".join(
+                                        [
+                                            format_sql_in_clause(k, v)
+                                            for k, v in within_clause.items()
+                                        ]
+                                    ),
+                                }
+                                for map_server_layer in map_server_layers
+                            ]
+                            geo_tasks.extend(geo_params)
                         continue
 
                     # Case B: Target geography is not specified. We need to figure out
@@ -1232,6 +1677,10 @@ class CenDatHelper:
                     # `final_in_clause` will store the components of the `in` parameter.
                     # A value of `None` indicates a level that needs discovery.
                     final_in_clause = {}
+                    if include_geometry:
+                        param.pop("optionalWithWCFor", None)
+                        if "wildcard" in param and isinstance(param["wildcard"], list):
+                            param["wildcard"] = param["wildcard"][1:]
                     if required_geos:
                         for geo in required_geos:
                             if geo in provided_parent_geos:
@@ -1244,6 +1693,7 @@ class CenDatHelper:
                     # Some geographies have an optional parent for wildcards.
                     # If that optional parent isn't provided, we should not include it
                     # in the `in` clause at all.
+
                     optional_level = param.get("optionalWithWCFor")
                     if optional_level and optional_level not in provided_parent_geos:
                         final_in_clause.pop(optional_level, None)
@@ -1255,7 +1705,10 @@ class CenDatHelper:
                     # If there are levels that need discovery, call the recursive helper.
                     combinations = []
                     if geos_to_fetch:
-                        print(f"ℹ️ Discovering parent geographies for: {geos_to_fetch}")
+                        if verbose:
+                            print(
+                                f"ℹ️ Discovering parent geographies for: {geos_to_fetch}"
+                            )
                         resolved_parents = {
                             k: v
                             for k, v in final_in_clause.items()
@@ -1271,7 +1724,7 @@ class CenDatHelper:
                     else:
                         combinations = [final_in_clause]
 
-                    if combinations:
+                    if combinations and verbose:
                         print(
                             f"✅ Found {len(combinations)} combinations. Building API queries..."
                         )
@@ -1289,52 +1742,82 @@ class CenDatHelper:
                             api_params["in"] = " ".join(
                                 [f"{k}:{v}" for k, v in call_in_clause.items()]
                             )
-                        all_tasks.append((vintage_url, api_params, context))
+                        data_tasks.append((vintage_url, api_params, context))
 
-        if not all_tasks:
+                        # Corrected logic for geometry task creation
+                        if include_geometry and not skip_geometry:
+                            # Build the WHERE clause conditions from the call_in_clause dictionary.
+                            where_conditions = [
+                                format_sql_in_clause(k, v)
+                                for k, v in call_in_clause.items()
+                                if v != "*"
+                            ]
+
+                            # If there are no conditions (e.g., a nationwide query for "us"),
+                            # use '1=1' as a universal "select all" filter. Otherwise, join them.
+                            final_where_clause = (
+                                " AND ".join(where_conditions)
+                                if where_conditions
+                                else "1=1"
+                            )
+
+                            geo_params = [
+                                {
+                                    "param_index": i,
+                                    "map_server": map_server,
+                                    "layer_id": map_server_layer,
+                                    "where_clause": final_where_clause,
+                                }
+                                for map_server_layer in map_server_layers
+                            ]
+                            geo_tasks.extend(geo_params)
+
+        if not data_tasks:
             print("❌ Error: Could not determine any API calls to make.")
             return CenDatResponse([])
 
-        self.n_calls = len(all_tasks)
+        self.n_calls = len(data_tasks)
 
         # If in preview mode, print the first few planned calls and exit.
         if preview_only:
             print(f"ℹ️ Preview: this will yield {self.n_calls} API call(s).")
-            for i, (url, params, _) in enumerate(all_tasks[:5]):
+            for i, (url, params, _) in enumerate(data_tasks[:5]):
                 print(
                     f"  - Call {i+1}: {url}?get={params.get('get')}&for={params.get('for')}&in={params.get('in','')}"
                 )
-            if len(all_tasks) > 5:
-                print(f"  ... and {len(all_tasks) - 5} more.")
+            if len(data_tasks) > 5:
+                print(f"  ... and {len(data_tasks) - 5} more.")
             return CenDatResponse([])
 
         else:
-            print(f"ℹ️ Making {self.n_calls} API call(s)...")
+            if verbose:
+                print(f"ℹ️ Making {self.n_calls} API call(s)...")
             # Execute all API calls concurrently.
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_context = {
-                    executor.submit(
-                        self._get_json_from_url, url, params, timeout
-                    ): context
-                    for url, params, context in all_tasks
-                }
-                for future in as_completed(future_to_context):
-                    # As each call completes, aggregate its results.
-                    context = future_to_context[future]
-                    param_index = context["param_index"]
-                    try:
-                        data = future.result()
-                        if data and len(data) > 1:
-                            if results_aggregator[param_index]["schema"] is None:
-                                results_aggregator[param_index]["schema"] = data[0]
-                            results_aggregator[param_index]["data"].extend(data[1:])
-                    except Exception as exc:
-                        print(f"❌ Task for {context} generated an exception: {exc}")
+            try:
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    # Submit the two master jobs for data and geometry fetching.
+                    future_geo = executor.submit(
+                        self._geometry_fetching,
+                        geo_tasks,
+                        max_workers,
+                        timeout,
+                        verbose,
+                    )
+                    future_data = executor.submit(
+                        self._data_fetching, data_tasks, max_workers, timeout
+                    )
 
-            # Attach the aggregated data back to the original parameter dictionaries.
-            for i, param in enumerate(self.params):
-                aggregated_result = results_aggregator[i]
-                param["schema"] = aggregated_result["schema"]
-                param["data"] = aggregated_result["data"]
+                    # Wait for both futures to complete. The .result() call will
+                    # re-raise any exceptions that occurred in the thread.
+                    future_data.result()
+                    future_geo.result()
 
-            return CenDatResponse(self.params)
+            except Exception as exc:
+                print(f"❌ A master fetching task failed: {exc}")
+                # Return an empty response if a master task fails
+                return CenDatResponse([])
+
+            if in_place is False:
+                params_copy = copy.deepcopy(self.params)
+                self.params = []
+                return CenDatResponse(params_copy)
