@@ -1010,3 +1010,112 @@ def test_get_data_handles_names_and_attributes_together(mock_get, cdh):
     requested_vars_set = set(requested_vars_str.split(","))
 
     assert requested_vars_set == expected_vars_set
+
+
+@pytest.mark.unit
+def test_set_years_validation(cdh):
+    """Tests that set_years validates input correctly."""
+    cdh.set_years(2022)
+    assert cdh.years == [2022]
+
+    cdh.set_years([2020, 2021])
+    assert cdh.years == [2020, 2021]
+
+    with pytest.raises(TypeError):
+        cdh.set_years("2022")
+
+
+@pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
+def test_list_geos_filtering(mock_get_json, cdh):
+    """Tests listing geographies with filtering."""
+    mock_get_json.side_effect = [
+        SIMPLE_PRODUCTS_JSON,
+        FAKE_GEOS_JSON,
+    ]
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+
+    geos = cdh.list_geos(patterns="county", to_dicts=False)
+    assert "050" in geos
+    assert len(geos) == 1
+
+
+@pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
+def test_set_geos_errors(mock_get_json, cdh, capsys):
+    """Tests error handling in set_geos."""
+    mock_get_json.return_value = SIMPLE_PRODUCTS_JSON
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+
+    # Test invalid 'by' argument
+    cdh.set_geos(values="state", by="invalid")
+    captured = capsys.readouterr()
+    assert "Error: `by` must be either 'sumlev' or 'desc'" in captured.out
+
+    # Test no geos found
+    cdh.set_geos(values="Nonexistent Geo", by="desc")
+    captured = capsys.readouterr()
+    assert "Error: No valid geographies were found to set" in captured.out
+
+
+@pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
+def test_describe_groups_output(mock_get_json, cdh, capsys):
+    """Tests the output of describe_groups."""
+    mock_get_json.side_effect = [
+        SIMPLE_PRODUCTS_JSON,
+        SIMPLE_GROUPS_JSON,
+        SIMPLE_VARIABLES_JSON,
+        SIMPLE_GROUPS_JSON,  # Called again inside describe_groups
+    ]
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_groups("B01001")
+
+    cdh.describe_groups()
+    captured = capsys.readouterr()
+
+    assert "Group: B01001 (SEX BY AGE)" in captured.out
+    assert "B01001_001E: Total Population" in captured.out
+
+
+@pytest.mark.unit
+def test_to_gpd_conversion():
+    """Tests conversion to GeoDataFrame."""
+    try:
+        import geopandas as gpd
+        from shapely.geometry import Polygon
+    except ImportError:
+        pytest.skip("GeoPandas not installed")
+
+    poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    gdf = gpd.GeoDataFrame({"GEOID": ["01", "02"], "geometry": [poly, poly]})
+
+    data = [
+        {
+            "product": "Product A",
+            "vintage": [2022],
+            "sumlev": "040",
+            "desc": "state",
+            "schema": ["GEO_ID", "NAME"],
+            "data": [["0400000US01", "Alabama"], ["0400000US02", "Alaska"]],
+            "geometry": gdf,
+        }
+    ]
+    response = CenDatResponse(data)
+
+    res_gdf = response.to_gpd()
+    assert isinstance(res_gdf, gpd.GeoDataFrame)
+    assert len(res_gdf) == 2
+    assert "geometry" in res_gdf.columns
+
+
+@pytest.mark.unit
+def test_tabulate_stratified(tabulation_response, capsys):
+    """Tests stratified tabulation."""
+    # Stratify by STATE, tabulate RACE
+    tabulation_response.tabulate("RACE", strat_by="STATE")
+    captured = capsys.readouterr().out
+
+    assert find_row_in_output(r"CA\s+┆\s+Black\s+┆\s+1", captured)
+    assert find_row_in_output(r"TX\s+┆\s+White\s+┆\s+2", captured)
+
