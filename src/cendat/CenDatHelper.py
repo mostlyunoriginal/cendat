@@ -1,3 +1,4 @@
+import time
 import re
 import requests
 import itertools
@@ -173,6 +174,43 @@ class CenDatHelper:
                 f"❌ Error fetching data from {url} with params {params}: {error_message}"
             )
         return None
+
+    def _get_json_from_url_with_status(
+        self, url: str, params: Optional[Dict] = None, timeout: int = 30
+    ) -> Tuple[Optional[List[List[str]]], Optional[int]]:
+        """
+        Internal helper to fetch and parse JSON from a URL, returning status code.
+
+        This variant of _get_json_from_url returns a tuple of (data, status_code)
+        to enable retry logic to distinguish between retryable server errors
+        (429, 5xx) and non-retryable client errors (4xx).
+
+        Args:
+            url (str): The URL to fetch.
+            params (Dict, optional): Dictionary of query parameters.
+            timeout (int): Request timeout in seconds.
+
+        Returns:
+            Tuple[Optional[List[List[str]]], Optional[int]]: A tuple of
+            (parsed JSON data, HTTP status code). Returns (None, status_code)
+            on error, or (None, None) on connection/timeout errors.
+        """
+        if not params:
+            params = {}
+        if self.__key:
+            params["key"] = self.__key
+
+        try:
+            response = requests.get(url, params=params, timeout=timeout)
+            status_code = response.status_code
+            response.raise_for_status()
+            return response.json(), status_code
+        except requests.exceptions.JSONDecodeError:
+            # Server returned 200 but invalid JSON - treat as success with no data
+            return None, response.status_code if 'response' in dir() else None
+        except requests.exceptions.RequestException as e:
+            status_code = e.response.status_code if e.response is not None else None
+            return None, status_code
 
     def _parse_vintage(self, vintage_input: Union[str, int]) -> List[int]:
         """
@@ -1108,30 +1146,104 @@ class CenDatHelper:
         tasks: List[Tuple[str, Dict, Dict]] = None,
         max_workers: Optional[int] = None,
         timeout: Optional[int] = None,
+        auto_retry: bool = True,
+        max_retries: int = 3,
+        min_workers: int = 5,
     ):
-        """Takes data API tasks and runs them in a thread pool."""
+        """
+        Takes data API tasks and runs them in a thread pool with adaptive retry.
 
+        When server errors (429, 5xx) are detected, this method automatically:
+        1. Waits with exponential backoff
+        2. Reduces worker count by 50%
+        3. Retries failed requests
+
+        Args:
+            tasks: List of (url, params, context) tuples for API calls.
+            max_workers: Maximum concurrent threads.
+            timeout: Request timeout in seconds.
+            auto_retry: If True, automatically retry on server errors.
+            max_retries: Maximum retry attempts before giving up.
+            min_workers: Floor for worker reduction (won't go below this).
+        """
         results_aggregator = {
             i: {"schema": None, "data": []} for i in range(len(self.params))
         }
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_context = {
-                executor.submit(self._get_json_from_url, url, params, timeout): context
-                for url, params, context in tasks
-            }
-            for future in as_completed(future_to_context):
-                # As each call completes, aggregate its results.
-                context = future_to_context[future]
-                param_index = context["param_index"]
-                try:
-                    data = future.result()
-                    if data and len(data) > 1:
-                        if results_aggregator[param_index]["schema"] is None:
-                            results_aggregator[param_index]["schema"] = data[0]
-                        results_aggregator[param_index]["data"].extend(data[1:])
-                except Exception as exc:
-                    print(f"❌ Task for {context} generated an exception: {exc}")
+        pending_tasks = list(tasks)
+        current_workers = max_workers
+        retry_count = 0
+
+        # Status codes that indicate server overload - these are retryable
+        RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+        while pending_tasks:
+            failed_tasks = []
+            server_error_count = 0
+
+            with ThreadPoolExecutor(max_workers=current_workers) as executor:
+                future_to_task = {
+                    executor.submit(
+                        self._get_json_from_url_with_status, url, params, timeout
+                    ): (url, params, context)
+                    for url, params, context in pending_tasks
+                }
+
+                for future in as_completed(future_to_task):
+                    url, params, context = future_to_task[future]
+                    param_index = context["param_index"]
+
+                    try:
+                        data, status_code = future.result()
+
+                        # Check if this is a retryable server error
+                        if status_code in RETRYABLE_STATUS_CODES:
+                            server_error_count += 1
+                            failed_tasks.append((url, params, context))
+                        elif data and len(data) > 1:
+                            # Success - aggregate the data
+                            if results_aggregator[param_index]["schema"] is None:
+                                results_aggregator[param_index]["schema"] = data[0]
+                            results_aggregator[param_index]["data"].extend(data[1:])
+                        # else: request succeeded but returned no/empty data - that's OK
+
+                    except Exception as exc:
+                        print(f"❌ Task for {context} generated an exception: {exc}")
+
+            # Decide whether to retry
+            if failed_tasks and auto_retry and retry_count < max_retries:
+                # Calculate error rate
+                error_rate = server_error_count / len(pending_tasks)
+
+                if error_rate > 0.1:  # More than 10% failed with server errors
+                    retry_count += 1
+                    # Reduce workers by 50%, but don't go below minimum
+                    current_workers = max(min_workers, current_workers // 2)
+                    # Exponential backoff
+                    backoff_time = 2 ** retry_count
+
+                    print(
+                        f"⚠️ {server_error_count}/{len(pending_tasks)} requests failed with server errors. "
+                        f"Retry {retry_count}/{max_retries}: reducing workers to {current_workers} "
+                        f"and waiting {backoff_time}s..."
+                    )
+                    time.sleep(backoff_time)
+                    pending_tasks = failed_tasks
+                else:
+                    # Low error rate - probably not a rate limiting issue
+                    if server_error_count > 0:
+                        print(
+                            f"⚠️ {server_error_count} requests failed but error rate is low. Not retrying."
+                        )
+                    pending_tasks = []
+            elif failed_tasks and retry_count >= max_retries:
+                print(
+                    f"❌ Maximum retries ({max_retries}) exceeded. "
+                    f"{len(failed_tasks)} requests could not be completed."
+                )
+                pending_tasks = []
+            else:
+                pending_tasks = []
 
         # After all tasks are complete, attach the aggregated data to self.params
         print("✅ Data fetching complete. Stacking results.")
@@ -1290,6 +1402,9 @@ class CenDatHelper:
         include_geometry: bool = False,
         in_place: bool = False,
         verbose: bool = False,
+        auto_retry: bool = True,
+        max_retries: int = 3,
+        min_workers: int = 5,
     ) -> "CenDatResponse":
         """
         Retrieves data from the Census API based on the set parameters.
@@ -1309,6 +1424,13 @@ class CenDatHelper:
                 Defaults to 30.
             preview_only (bool): If True, builds the list of API calls but does
                 not execute them. Useful for debugging. Defaults to False.
+            auto_retry (bool): If True (default), automatically retry failed
+                requests caused by server overload (429, 5xx errors) with
+                reduced worker count and exponential backoff.
+            max_retries (int): Maximum number of retry attempts when
+                auto_retry is enabled. Defaults to 3.
+            min_workers (int): Minimum number of workers to use when
+                retrying. Worker count won't be reduced below this. Defaults to 5.
 
         Returns:
             CenDatResponse: An object containing the aggregated data from all
@@ -1804,7 +1926,13 @@ class CenDatHelper:
                         verbose,
                     )
                     future_data = executor.submit(
-                        self._data_fetching, data_tasks, max_workers, timeout
+                        self._data_fetching,
+                        data_tasks,
+                        max_workers,
+                        timeout,
+                        auto_retry,
+                        max_retries,
+                        min_workers,
                     )
 
                     # Wait for both futures to complete. The .result() call will
