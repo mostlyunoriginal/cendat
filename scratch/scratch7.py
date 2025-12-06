@@ -1,3 +1,4 @@
+from ntpath import join
 import os
 from cendat import CenDatHelper
 
@@ -13,4 +14,7 @@ response = cdh.get_data(
     verbose=True,
 )
 df = response.to_polars(concat=True)
-print(f"\n📊 Total rows returned: {len(df)}")
+print(f"\nTotal rows returned: {len(df)}")
+
+gdf = response.to_gpd(join_strategy="inner")
+print(f"\nTotal rows returned: {len(gdf)}")
