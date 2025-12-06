@@ -11,7 +11,6 @@ cdh.set_geos("150")
 response = cdh.get_data(
     include_geometry=True,
     within={"state": ["08", "56"]},
-    verbose=True,
 )
 df = response.to_polars(concat=True)
 print(f"\nTotal rows returned: {len(df)}")
