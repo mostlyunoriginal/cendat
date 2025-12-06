@@ -1555,7 +1555,7 @@ class CenDatHelper:
     def get_data(
         self,
         within: Union[str, Dict, List[Dict]] = "us",
-        max_workers: Optional[int] = 50,
+        max_workers: Optional[int] = 25,
         timeout: int = 30,
         preview_only: bool = False,
         include_names: bool = False,
@@ -1581,7 +1581,7 @@ class CenDatHelper:
                 geographies (e.g., `{'state': '06'}` for California), or a list
                 of such dictionaries for multiple scopes.
             max_workers (int, optional): The maximum number of concurrent
-                threads to use for API calls. Defaults to 50.
+                threads to use for API calls. Defaults to 25.
             timeout (int): Request timeout in seconds for each API call.
                 Defaults to 30.
             preview_only (bool): If True, builds the list of API calls but does
