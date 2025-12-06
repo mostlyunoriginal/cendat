@@ -1197,7 +1197,8 @@ class CenDatHelper:
                         data, status_code = future.result()
 
                         # Check if this is a retryable server error
-                        if status_code in RETRYABLE_STATUS_CODES:
+                        # Also retry on connection errors (status_code is None)
+                        if status_code in RETRYABLE_STATUS_CODES or status_code is None:
                             server_error_count += 1
                             failed_tasks.append((url, params, context))
                         elif data and len(data) > 1:
@@ -1393,7 +1394,7 @@ class CenDatHelper:
     def get_data(
         self,
         within: Union[str, Dict, List[Dict]] = "us",
-        max_workers: Optional[int] = 100,
+        max_workers: Optional[int] = 50,
         timeout: int = 30,
         preview_only: bool = False,
         include_names: bool = False,
@@ -1419,7 +1420,7 @@ class CenDatHelper:
                 geographies (e.g., `{'state': '06'}` for California), or a list
                 of such dictionaries for multiple scopes.
             max_workers (int, optional): The maximum number of concurrent
-                threads to use for API calls. Defaults to 100.
+                threads to use for API calls. Defaults to 50.
             timeout (int): Request timeout in seconds for each API call.
                 Defaults to 30.
             preview_only (bool): If True, builds the list of API calls but does
