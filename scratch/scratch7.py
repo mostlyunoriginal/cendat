@@ -2,7 +2,7 @@ from ntpath import join
 import os
 from cendat import CenDatHelper
 
-cdh = CenDatHelper(key=os.getenv("CENSUS_API_KEY"))
+cdh = CenDatHelper()
 
 cdh.list_products(years=[2023], patterns=r"/acs/acs5\)")
 cdh.set_products()

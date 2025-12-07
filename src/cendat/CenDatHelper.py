@@ -127,7 +127,7 @@ class CenDatHelper:
             print("⚠️ No API key provided. API requests may have stricter rate limits.")
 
     def _get_json_from_url(
-        self, url: str, params: Optional[Dict] = None, timeout: int = 30
+        self, url: str, params: Optional[Dict] = None, timeout: int = 30, include_key: bool = True
     ) -> Optional[List[List[str]]]:
         """
         Internal helper to fetch and parse JSON from a URL with error handling.
@@ -136,13 +136,15 @@ class CenDatHelper:
             url (str): The URL to fetch.
             params (Dict, optional): Dictionary of query parameters.
             timeout (int): Request timeout in seconds.
+            include_key (bool): Whether to include the API key in the request.
+                Some endpoints like data.json don't accept keys.
 
         Returns:
             Optional[List[List[str]]]: The parsed JSON data (typically a list of lists), or None if an error occurs.
         """
         if not params:
             params = {}
-        if self.__key:
+        if include_key and self.__key:
             params["key"] = self.__key
 
         try:
@@ -175,7 +177,7 @@ class CenDatHelper:
         return None
 
     def _get_json_from_url_with_status(
-        self, url: str, params: Optional[Dict] = None, timeout: int = 30
+        self, url: str, params: Optional[Dict] = None, timeout: int = 30, include_key: bool = True
     ) -> Tuple[Optional[List[List[str]]], Optional[int]]:
         """
         Internal helper to fetch and parse JSON from a URL, returning status code.
@@ -188,13 +190,15 @@ class CenDatHelper:
             url (str): The URL to fetch.
             params (Dict, optional): Dictionary of query parameters.
             timeout (int): Request timeout in seconds.
+            include_key (bool): Whether to include the API key in the request.
+                Some endpoints like data.json don't accept keys.
 
         Returns:
             Tuple[Optional[List[List[str]]], Optional[int]]: A tuple of (parsed JSON data, HTTP status code). Returns (None, status_code) on error, or (None, None) on connection/timeout errors.
         """
         if not params:
             params = {}
-        if self.__key:
+        if include_key and self.__key:
             params["key"] = self.__key
 
         try:
@@ -267,7 +271,7 @@ class CenDatHelper:
         # Strategy: Fetch all products from the main data.json endpoint once and cache them.
         # Subsequent calls will use the cache and apply filters.
         if not self._products_cache:
-            data = self._get_json_from_url("https://api.census.gov/data.json")
+            data = self._get_json_from_url("https://api.census.gov/data.json", include_key=False)
             if not data or "dataset" not in data:
                 return []
             products = []
@@ -420,7 +424,7 @@ class CenDatHelper:
         flat_geo_list = []
         for product in self.products:
             url = f"{product['base_url']}/geography.json"
-            data = self._get_json_from_url(url)
+            data = self._get_json_from_url(url, include_key=False)
             if not data or "fips" not in data:
                 continue
             for geo_info in data["fips"]:
@@ -564,7 +568,7 @@ class CenDatHelper:
         flat_group_list = []
         for product in self.products:
             url = f"{product['base_url']}/groups.json"
-            data = self._get_json_from_url(url)
+            data = self._get_json_from_url(url, include_key=False)
             if not data or "groups" not in data:
                 continue
             for group_details in data["groups"]:
@@ -761,7 +765,7 @@ class CenDatHelper:
         flat_variable_list = []
         for product in self.products:
             url = f"{product['base_url']}/variables.json"
-            data = self._get_json_from_url(url)
+            data = self._get_json_from_url(url, include_key=False)
             if not data or "variables" not in data:
                 continue
             for name, details in data["variables"].items():
