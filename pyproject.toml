@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cendat"
-version = "0.7.0"
+version = "0.8.0"
 authors = [
   { name="G. Lance Couzens", email="lance.couzens@gmail.com" },
 ]
@@ -33,3 +33,10 @@ polars = ["polars"]
 geopandas = ["geopandas"]
 
 all = ["pandas", "polars", "geopandas"]
+
+[dependency-groups]
+dev = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.0",
+    "mkdocstrings[python]>=0.30.1",
+]

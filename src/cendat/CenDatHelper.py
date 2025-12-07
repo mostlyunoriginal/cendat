@@ -1,3 +1,4 @@
+import time
 import re
 import requests
 import itertools
@@ -137,8 +138,7 @@ class CenDatHelper:
             timeout (int): Request timeout in seconds.
 
         Returns:
-            Optional[List[List[str]]]: The parsed JSON data (typically a list
-            of lists), or None if an error occurs.
+            Optional[List[List[str]]]: The parsed JSON data (typically a list of lists), or None if an error occurs.
         """
         if not params:
             params = {}
@@ -173,6 +173,41 @@ class CenDatHelper:
                 f"❌ Error fetching data from {url} with params {params}: {error_message}"
             )
         return None
+
+    def _get_json_from_url_with_status(
+        self, url: str, params: Optional[Dict] = None, timeout: int = 30
+    ) -> Tuple[Optional[List[List[str]]], Optional[int]]:
+        """
+        Internal helper to fetch and parse JSON from a URL, returning status code.
+
+        This variant of _get_json_from_url returns a tuple of (data, status_code)
+        to enable retry logic to distinguish between retryable server errors
+        (429, 5xx) and non-retryable client errors (4xx).
+
+        Args:
+            url (str): The URL to fetch.
+            params (Dict, optional): Dictionary of query parameters.
+            timeout (int): Request timeout in seconds.
+
+        Returns:
+            Tuple[Optional[List[List[str]]], Optional[int]]: A tuple of (parsed JSON data, HTTP status code). Returns (None, status_code) on error, or (None, None) on connection/timeout errors.
+        """
+        if not params:
+            params = {}
+        if self.__key:
+            params["key"] = self.__key
+
+        try:
+            response = requests.get(url, params=params, timeout=timeout)
+            status_code = response.status_code
+            response.raise_for_status()
+            return response.json(), status_code
+        except requests.exceptions.JSONDecodeError:
+            # Server returned 200 but invalid JSON - treat as success with no data
+            return None, response.status_code if 'response' in dir() else None
+        except requests.exceptions.RequestException as e:
+            status_code = e.response.status_code if e.response is not None else None
+            return None, status_code
 
     def _parse_vintage(self, vintage_input: Union[str, int]) -> List[int]:
         """
@@ -990,8 +1025,7 @@ class CenDatHelper:
             max_workers (int, optional): Max concurrent threads for fetching.
 
         Returns:
-            List[Dict]: A list of dictionaries, where each dict is a valid
-                        `in` clause for a data request.
+            List[Dict]: A list of dictionaries, where each dict is a valid `in` clause for a data request.
 
         Strategy: This is a recursive function.
         - Base Case: If there are no more required geographies to fetch, return the
@@ -1064,8 +1098,7 @@ class CenDatHelper:
             count_only (bool): If True, returns only the count of matching records.
 
         Returns:
-            If count_only is True, returns an integer count. Otherwise, returns
-            a GeoDataFrame with the requested geometries.
+            If count_only is True, returns an integer count. Otherwise, returns a GeoDataFrame with the requested geometries.
         """
         import geopandas as gpd
 
@@ -1103,35 +1136,175 @@ class CenDatHelper:
 
         return gpd.GeoDataFrame() if not count_only else 0
 
+    def _get_gdf_from_url_with_status(
+        self,
+        layer_id: int,
+        where_clause: str,
+        service: str = "TIGERweb/tigerWMS_Current",
+        timeout: int = None,
+        offset: int = None,
+        n_records: int = None,
+        count_only: bool = False,
+    ) -> Tuple[Union["gpd.GeoDataFrame", int], Optional[int]]:
+        """
+        Fetches geographic data from TIGERweb, returning status code for retry logic.
+
+        This variant of _get_gdf_from_url returns a tuple of (result, status_code)
+        to enable retry logic to distinguish between retryable server errors
+        (429, 5xx) and non-retryable client errors (4xx). Connection errors
+        return status_code=None, which should also be treated as retryable.
+
+        Args:
+            layer_id (int): The numeric ID for the desired geography layer.
+            where_clause (str): An SQL-like clause to filter the geographies.
+            service (str): The name of the TIGERweb map service to query.
+            timeout (int, optional): Request timeout in seconds.
+            offset (int, optional): The starting record offset for pagination.
+            n_records (int, optional): The number of records to return per page.
+            count_only (bool): If True, returns only the count of matching records.
+
+        Returns:
+            Tuple of (result, status_code). Result is either an int (count) or GeoDataFrame. status_code is None for connection errors.
+        """
+        import geopandas as gpd
+
+        API_URL = f"https://tigerweb.geo.census.gov/arcgis/rest/services/{service}/MapServer/{layer_id}/query"
+
+        params = {
+            "where": where_clause,
+            "outFields": "GEOID,NAME",
+            "outSR": "4326",
+            "f": "geojson",
+            "returnGeometry": "true" if not count_only else "false",
+            "returnCountOnly": str(count_only).lower(),
+            "resultOffset": offset,
+            "resultRecordCount": n_records,
+            "timeout": timeout,
+        }
+        params = {k: v for k, v in params.items() if v is not None}
+
+        try:
+            response = requests.get(API_URL, params=params, timeout=timeout or 30)
+            status_code = response.status_code
+            response.raise_for_status()
+            json_response = response.json()
+
+            if count_only:
+                return json_response.get("count", 0), status_code
+
+            return gpd.GeoDataFrame.from_features(json_response["features"]), status_code
+
+        except requests.exceptions.RequestException as e:
+            status_code = e.response.status_code if e.response is not None else None
+            return (gpd.GeoDataFrame() if not count_only else 0), status_code
+        except (KeyError, ValueError):
+            # JSON parse error - treat as non-retryable (likely bad response format)
+            return (gpd.GeoDataFrame() if not count_only else 0), 200
+
     def _data_fetching(
         self,
         tasks: List[Tuple[str, Dict, Dict]] = None,
         max_workers: Optional[int] = None,
         timeout: Optional[int] = None,
+        auto_retry: bool = True,
+        max_retries: int = 3,
+        min_workers: int = 5,
     ):
-        """Takes data API tasks and runs them in a thread pool."""
+        """
+        Takes data API tasks and runs them in a thread pool with adaptive retry.
 
+        When server errors (429, 5xx) are detected, this method automatically:
+        1. Waits with exponential backoff
+        2. Reduces worker count by 50%
+        3. Retries failed requests
+
+        Args:
+            tasks: List of (url, params, context) tuples for API calls.
+            max_workers: Maximum concurrent threads.
+            timeout: Request timeout in seconds.
+            auto_retry: If True, automatically retry on server errors.
+            max_retries: Maximum retry attempts before giving up.
+            min_workers: Floor for worker reduction (won't go below this).
+        """
         results_aggregator = {
             i: {"schema": None, "data": []} for i in range(len(self.params))
         }
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_context = {
-                executor.submit(self._get_json_from_url, url, params, timeout): context
-                for url, params, context in tasks
-            }
-            for future in as_completed(future_to_context):
-                # As each call completes, aggregate its results.
-                context = future_to_context[future]
-                param_index = context["param_index"]
-                try:
-                    data = future.result()
-                    if data and len(data) > 1:
-                        if results_aggregator[param_index]["schema"] is None:
-                            results_aggregator[param_index]["schema"] = data[0]
-                        results_aggregator[param_index]["data"].extend(data[1:])
-                except Exception as exc:
-                    print(f"❌ Task for {context} generated an exception: {exc}")
+        pending_tasks = list(tasks)
+        current_workers = max_workers
+        retry_count = 0
+
+        # Status codes that indicate server overload - these are retryable
+        RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+        while pending_tasks:
+            failed_tasks = []
+            server_error_count = 0
+
+            with ThreadPoolExecutor(max_workers=current_workers) as executor:
+                future_to_task = {
+                    executor.submit(
+                        self._get_json_from_url_with_status, url, params, timeout
+                    ): (url, params, context)
+                    for url, params, context in pending_tasks
+                }
+
+                for future in as_completed(future_to_task):
+                    url, params, context = future_to_task[future]
+                    param_index = context["param_index"]
+
+                    try:
+                        data, status_code = future.result()
+
+                        # Check if this is a retryable server error
+                        # Also retry on connection errors (status_code is None)
+                        if status_code in RETRYABLE_STATUS_CODES or status_code is None:
+                            server_error_count += 1
+                            failed_tasks.append((url, params, context))
+                        elif data and len(data) > 1:
+                            # Success - aggregate the data
+                            if results_aggregator[param_index]["schema"] is None:
+                                results_aggregator[param_index]["schema"] = data[0]
+                            results_aggregator[param_index]["data"].extend(data[1:])
+                        # else: request succeeded but returned no/empty data - that's OK
+
+                    except Exception as exc:
+                        print(f"❌ Task for {context} generated an exception: {exc}")
+
+            # Decide whether to retry
+            if failed_tasks and auto_retry and retry_count < max_retries:
+                # Calculate error rate
+                error_rate = server_error_count / len(pending_tasks)
+
+                if error_rate > 0.1:  # More than 10% failed with server errors
+                    retry_count += 1
+                    # Reduce workers by 50%, but don't go below minimum
+                    current_workers = max(min_workers, current_workers // 2)
+                    # Exponential backoff
+                    backoff_time = 2 ** retry_count
+
+                    print(
+                        f"⚠️ {server_error_count}/{len(pending_tasks)} requests failed with server errors. "
+                        f"Retry {retry_count}/{max_retries}: reducing workers to {current_workers} "
+                        f"and waiting {backoff_time}s..."
+                    )
+                    time.sleep(backoff_time)
+                    pending_tasks = failed_tasks
+                else:
+                    # Low error rate - probably not a rate limiting issue
+                    if server_error_count > 0:
+                        print(
+                            f"⚠️ {server_error_count} requests failed but error rate is low. Not retrying."
+                        )
+                    pending_tasks = []
+            elif failed_tasks and retry_count >= max_retries:
+                print(
+                    f"❌ Maximum retries ({max_retries}) exceeded. "
+                    f"{len(failed_tasks)} requests could not be completed."
+                )
+                pending_tasks = []
+            else:
+                pending_tasks = []
 
         # After all tasks are complete, attach the aggregated data to self.params
         print("✅ Data fetching complete. Stacking results.")
@@ -1150,6 +1323,9 @@ class CenDatHelper:
         max_workers: Optional[int] = None,
         timeout: Optional[int] = None,
         verbose: bool = False,
+        auto_retry: bool = True,
+        max_retries: int = 3,
+        min_workers: int = 5,
     ):
         """
         Takes TIGERweb tasks, handles pagination, and fetches geometries in a thread pool.
@@ -1158,12 +1334,18 @@ class CenDatHelper:
         recursion depth limits, which is safer for queries that could return
         many thousands of features.
 
+        When server errors (429, 5xx) or connection errors are detected, this method
+        automatically:
+        1. Waits with exponential backoff
+        2. Reduces worker count by 50%
+        3. Retries failed requests
+
         Strategy:
         1. For each initial task, make a pre-flight request to get the total count
            of geometries. These requests are run concurrently.
         2. Based on the count, calculate how many paginated requests are needed.
         3. Create a list of all sub-tasks (one for each page).
-        4. Execute all sub-tasks concurrently in a thread pool.
+        4. Execute all sub-tasks concurrently in a thread pool with retry logic.
         5. Aggregate the resulting GeoDataFrames and attach them to the corresponding
            item in `self.params`.
         """
@@ -1171,6 +1353,7 @@ class CenDatHelper:
         paginated_tasks = []
 
         RECORDS_PER_PAGE = 1000
+        RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
         if not tasks:
             return
@@ -1182,53 +1365,93 @@ class CenDatHelper:
             print("ℹ️ Pre-querying for geometry counts to determine pagination...")
 
         # Step 1 & 2: Concurrently pre-flight requests to get counts and create paginated tasks
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_task = {
-                executor.submit(
-                    self._get_gdf_from_url,
-                    layer_id=task["layer_id"],
-                    where_clause=task["where_clause"],
-                    service=task["map_server"],
-                    timeout=timeout,
-                    count_only=True,
-                ): task
-                for task in tasks
-            }
+        # Pre-flight requests also use retry logic
+        pending_preflight = list(tasks)
+        current_workers = max_workers
+        retry_count = 0
 
-            for future in as_completed(future_to_task):
-                task = future_to_task[future]
-                where_clause = task["where_clause"]
-                try:
-                    total_records = future.result()
+        while pending_preflight:
+            failed_preflight = []
+            server_error_count = 0
 
-                    if total_records == 0:
+            with ThreadPoolExecutor(max_workers=current_workers) as executor:
+                future_to_task = {
+                    executor.submit(
+                        self._get_gdf_from_url_with_status,
+                        layer_id=task["layer_id"],
+                        where_clause=task["where_clause"],
+                        service=task["map_server"],
+                        timeout=timeout,
+                        count_only=True,
+                    ): task
+                    for task in pending_preflight
+                }
+
+                for future in as_completed(future_to_task):
+                    task = future_to_task[future]
+                    where_clause = task["where_clause"]
+                    try:
+                        total_records, status_code = future.result()
+
+                        # Check if this is a retryable error
+                        if status_code in RETRYABLE_STATUS_CODES or status_code is None:
+                            server_error_count += 1
+                            failed_preflight.append(task)
+                            continue
+
+                        if total_records == 0:
+                            if verbose:
+                                print(
+                                    f"  - No geometries found for WHERE '{where_clause[:60]}...'. Skipping."
+                                )
+                            continue
+
                         if verbose:
                             print(
-                                f"  - No geometries found for WHERE '{where_clause[:60]}...'. Skipping."
+                                f"  - Found {total_records} geometries for WHERE '{where_clause[:60]}...'. Building paginated tasks."
                             )
-                        continue
 
-                    if verbose:
+                        # Step 3: Create sub-tasks for each page
+                        for offset in range(0, total_records, RECORDS_PER_PAGE):
+                            paginated_tasks.append(
+                                {
+                                    "param_index": task["param_index"],
+                                    "layer_id": task["layer_id"],
+                                    "where_clause": where_clause,
+                                    "service": task["map_server"],
+                                    "offset": offset,
+                                    "n_records": RECORDS_PER_PAGE,
+                                }
+                            )
+                    except Exception as exc:
                         print(
-                            f"  - Found {total_records} geometries for WHERE '{where_clause[:60]}...'. Building paginated tasks."
+                            f"❌ Failed during geometry count pre-flight for {where_clause}: {exc}"
                         )
 
-                    # Step 3: Create sub-tasks for each page
-                    for offset in range(0, total_records, RECORDS_PER_PAGE):
-                        paginated_tasks.append(
-                            {
-                                "param_index": task["param_index"],
-                                "layer_id": task["layer_id"],
-                                "where_clause": where_clause,
-                                "service": task["map_server"],
-                                "offset": offset,
-                                "n_records": RECORDS_PER_PAGE,
-                            }
-                        )
-                except Exception as exc:
+            # Decide whether to retry pre-flight
+            if failed_preflight and auto_retry and retry_count < max_retries:
+                error_rate = server_error_count / len(pending_preflight)
+                if error_rate > 0.1:
+                    retry_count += 1
+                    current_workers = max(min_workers, current_workers // 2)
+                    backoff_time = 2 ** retry_count
                     print(
-                        f"❌ Failed during geometry count pre-flight for {where_clause}: {exc}"
+                        f"⚠️ {server_error_count}/{len(pending_preflight)} pre-flight requests failed. "
+                        f"Retry {retry_count}/{max_retries}: reducing workers to {current_workers} "
+                        f"and waiting {backoff_time}s..."
                     )
+                    time.sleep(backoff_time)
+                    pending_preflight = failed_preflight
+                else:
+                    pending_preflight = []
+            elif failed_preflight and retry_count >= max_retries:
+                print(
+                    f"❌ Maximum retries ({max_retries}) exceeded for pre-flight. "
+                    f"{len(failed_preflight)} requests could not be completed."
+                )
+                pending_preflight = []
+            else:
+                pending_preflight = []
 
         if not paginated_tasks:
             if verbose:
@@ -1238,35 +1461,79 @@ class CenDatHelper:
         # Dictionary to aggregate GDFs for each original param
         results_aggregator = defaultdict(list)
 
-        # Step 4: Execute all paginated tasks concurrently
+        # Step 4: Execute all paginated tasks concurrently with retry logic
         if verbose:
             print(
                 f"ℹ️ Fetching geometries across {len(paginated_tasks)} paginated calls..."
             )
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_context = {
-                executor.submit(
-                    self._get_gdf_from_url,
-                    layer_id=p_task["layer_id"],
-                    where_clause=p_task["where_clause"],
-                    service=p_task["service"],
-                    timeout=timeout,
-                    offset=p_task["offset"],
-                    n_records=p_task["n_records"],
-                ): p_task
-                for p_task in paginated_tasks
-            }
+        pending_tasks = list(paginated_tasks)
+        current_workers = max_workers  # Reset workers for this phase
+        retry_count = 0
 
-            for future in as_completed(future_to_context):
-                context = future_to_context[future]
-                param_index = context["param_index"]
-                try:
-                    gdf = future.result()
-                    if not gdf.empty:
-                        results_aggregator[param_index].append(gdf)
-                except Exception as exc:
-                    print(f"❌ Geometry fetch task failed for {context}: {exc}")
+        while pending_tasks:
+            failed_tasks = []
+            server_error_count = 0
+
+            with ThreadPoolExecutor(max_workers=current_workers) as executor:
+                future_to_context = {
+                    executor.submit(
+                        self._get_gdf_from_url_with_status,
+                        layer_id=p_task["layer_id"],
+                        where_clause=p_task["where_clause"],
+                        service=p_task["service"],
+                        timeout=timeout,
+                        offset=p_task["offset"],
+                        n_records=p_task["n_records"],
+                    ): p_task
+                    for p_task in pending_tasks
+                }
+
+                for future in as_completed(future_to_context):
+                    context = future_to_context[future]
+                    param_index = context["param_index"]
+                    try:
+                        gdf, status_code = future.result()
+
+                        # Check if this is a retryable error
+                        if status_code in RETRYABLE_STATUS_CODES or status_code is None:
+                            server_error_count += 1
+                            failed_tasks.append(context)
+                        elif not gdf.empty:
+                            results_aggregator[param_index].append(gdf)
+                        # else: request succeeded but returned no data - that's OK
+
+                    except Exception as exc:
+                        print(f"❌ Geometry fetch task failed for {context}: {exc}")
+
+            # Decide whether to retry
+            if failed_tasks and auto_retry and retry_count < max_retries:
+                error_rate = server_error_count / len(pending_tasks)
+                if error_rate > 0.1:
+                    retry_count += 1
+                    current_workers = max(min_workers, current_workers // 2)
+                    backoff_time = 2 ** retry_count
+                    print(
+                        f"⚠️ {server_error_count}/{len(pending_tasks)} geometry requests failed. "
+                        f"Retry {retry_count}/{max_retries}: reducing workers to {current_workers} "
+                        f"and waiting {backoff_time}s..."
+                    )
+                    time.sleep(backoff_time)
+                    pending_tasks = failed_tasks
+                else:
+                    if server_error_count > 0:
+                        print(
+                            f"⚠️ {server_error_count} geometry requests failed but error rate is low. Not retrying."
+                        )
+                    pending_tasks = []
+            elif failed_tasks and retry_count >= max_retries:
+                print(
+                    f"❌ Maximum retries ({max_retries}) exceeded for geometry fetching. "
+                    f"{len(failed_tasks)} requests could not be completed."
+                )
+                pending_tasks = []
+            else:
+                pending_tasks = []
 
         # Step 5: Concatenate GDFs and attach to self.params
         print("✅ Geometry fetching complete. Stacking results.")
@@ -1278,10 +1545,11 @@ class CenDatHelper:
             else:
                 param["geometry"] = gpd.GeoDataFrame()
 
+
     def get_data(
         self,
         within: Union[str, Dict, List[Dict]] = "us",
-        max_workers: Optional[int] = 100,
+        max_workers: Optional[int] = 25,
         timeout: int = 30,
         preview_only: bool = False,
         include_names: bool = False,
@@ -1290,6 +1558,9 @@ class CenDatHelper:
         include_geometry: bool = False,
         in_place: bool = False,
         verbose: bool = False,
+        auto_retry: bool = True,
+        max_retries: int = 3,
+        min_workers: int = 5,
     ) -> "CenDatResponse":
         """
         Retrieves data from the Census API based on the set parameters.
@@ -1304,15 +1575,21 @@ class CenDatHelper:
                 geographies (e.g., `{'state': '06'}` for California), or a list
                 of such dictionaries for multiple scopes.
             max_workers (int, optional): The maximum number of concurrent
-                threads to use for API calls. Defaults to 100.
+                threads to use for API calls. Defaults to 25.
             timeout (int): Request timeout in seconds for each API call.
                 Defaults to 30.
             preview_only (bool): If True, builds the list of API calls but does
                 not execute them. Useful for debugging. Defaults to False.
+            auto_retry (bool): If True (default), automatically retry failed
+                requests caused by server overload (429, 5xx errors) with
+                reduced worker count and exponential backoff.
+            max_retries (int): Maximum number of retry attempts when
+                auto_retry is enabled. Defaults to 3.
+            min_workers (int): Minimum number of workers to use when
+                retrying. Worker count won't be reduced below this. Defaults to 5.
 
         Returns:
-            CenDatResponse: An object containing the aggregated data from all
-                            successful API calls.
+            CenDatResponse: An object containing the aggregated data from all successful API calls.
 
         High-level Strategy:
         1. Generate parameter sets by combining set products, geos, and variables/groups.
@@ -1802,9 +2079,18 @@ class CenDatHelper:
                         max_workers,
                         timeout,
                         verbose,
+                        auto_retry,
+                        max_retries,
+                        min_workers,
                     )
                     future_data = executor.submit(
-                        self._data_fetching, data_tasks, max_workers, timeout
+                        self._data_fetching,
+                        data_tasks,
+                        max_workers,
+                        timeout,
+                        auto_retry,
+                        max_retries,
+                        min_workers,
                     )
 
                     # Wait for both futures to complete. The .result() call will

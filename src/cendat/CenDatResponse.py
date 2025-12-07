@@ -235,9 +235,7 @@ class CenDatResponse:
             _data: For internal use by other methods. Do not set manually.
 
         Returns:
-            Union[List[pl.DataFrame], pl.DataFrame]: A list of Polars DataFrames,
-            or a single concatenated DataFrame if `concat=True`. Returns an empty
-            list if Polars is not installed or no data is available.
+            Union[List[pl.DataFrame], pl.DataFrame]: A list of Polars DataFrames, or a single concatenated DataFrame if `concat=True`. Returns an empty list if Polars is not installed or no data is available.
         """
         try:
             import polars as pl
@@ -300,9 +298,7 @@ class CenDatResponse:
             _data: For internal use by other methods. Do not set manually.
 
         Returns:
-            Union[List[pd.DataFrame], pd.DataFrame]: A list of Pandas DataFrames,
-            or a single concatenated DataFrame if `concat=True`. Returns an empty
-            list if Pandas is not installed or no data is available.
+            Union[List[pd.DataFrame], pd.DataFrame]: A list of Pandas DataFrames, or a single concatenated DataFrame if `concat=True`. Returns an empty list if Pandas is not installed or no data is available.
         """
         try:
             import pandas as pd
@@ -360,9 +356,7 @@ class CenDatResponse:
                 - 'inner': Keeps only records that exist in both data and geometry sets.
 
         Returns:
-            gpd.GeoDataFrame: A single, concatenated GeoDataFrame containing both
-            the tabular data and the geographic shapes. Returns an empty
-            GeoDataFrame if GeoPandas is not installed or no data is available.
+            gpd.GeoDataFrame: A single, concatenated GeoDataFrame containing both the tabular data and the geographic shapes. Returns an empty GeoDataFrame if GeoPandas is not installed or no data is available.
         """
         try:
             import geopandas as gpd

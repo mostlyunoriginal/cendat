@@ -259,17 +259,20 @@ def test_get_data_preview_only_skips_fetching(mock_get_json, mock_get_combos, cd
 
 
 @pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url_with_status")
 @patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
-def test_get_data_handles_microdata_correctly(mock_get_json, cdh):
+def test_get_data_handles_microdata_correctly(mock_get_json, mock_get_json_status, cdh):
     """Tests that the microdata workflow constructs the correct API call."""
-    # Mock the setup calls first
+    # Mock the setup calls (products, geos, variables)
     mock_get_json.side_effect = [
         SIMPLE_PRODUCTS_JSON,
         FAKE_GEOS_JSON,
         SIMPLE_VARIABLES_JSON,
-        # Mock the two data calls with valid list-of-lists responses
-        [["PUMA", "state"], ["01301", "08"]],
-        [["PUMA", "state"], ["01302", "08"]],
+    ]
+    # Mock the data calls with (data, status_code) tuples
+    mock_get_json_status.side_effect = [
+        ([["PUMA", "state"], ["01301", "08"]], 200),
+        ([["PUMA", "state"], ["01302", "08"]], 200),
     ]
 
     cdh.set_products(titles="PUMS Household Data (2022/acs/acs5/pums)")
@@ -279,13 +282,14 @@ def test_get_data_handles_microdata_correctly(mock_get_json, cdh):
         within={"state": "08", "public use microdata area": ["01301", "01302"]}
     )
 
-    assert mock_get_json.call_count == 5  # 3 setup calls + 2 data calls
+    assert mock_get_json.call_count == 3  # 3 setup calls
+    assert mock_get_json_status.call_count == 2  # 2 data calls
 
-    first_data_call = mock_get_json.call_args_list[-2]
+    first_data_call = mock_get_json_status.call_args_list[0]
     assert first_data_call.args[1]["for"] == "public use microdata area:01301"
     assert first_data_call.args[1]["in"] == "state:08"
 
-    second_data_call = mock_get_json.call_args_list[-1]
+    second_data_call = mock_get_json_status.call_args_list[1]
     assert second_data_call.args[1]["for"] == "public use microdata area:01302"
     assert second_data_call.args[1]["in"] == "state:08"
 
@@ -327,16 +331,19 @@ def test_set_geos_requires_message(mock_get, cdh, capsys):
 
 
 @pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url_with_status")
 @patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
 @patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
-def test_get_data_expands_within_clauses_correctly(mock_get_json, mock_get_combos, cdh):
+def test_get_data_expands_within_clauses_correctly(mock_get_json, mock_get_combos, mock_get_json_status, cdh):
     mock_get_json.side_effect = [
         SIMPLE_PRODUCTS_JSON,
         FAKE_GEOS_JSON,
         SIMPLE_VARIABLES_JSON,
-        # Mock data responses for the two API calls
-        [["B01001_001E"], ["100"]],
-        [["B01001_001E"], ["200"]],
+    ]
+    # Mock data responses with (data, status_code) tuples
+    mock_get_json_status.side_effect = [
+        ([["B01001_001E"], ["100"]], 200),
+        ([["B01001_001E"], ["200"]], 200),
     ]
     mock_get_combos.return_value = [{"state": "08", "county": "123"}]
 
@@ -351,18 +358,21 @@ def test_get_data_expands_within_clauses_correctly(mock_get_json, mock_get_combo
 
 
 @pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url_with_status")
 @patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
 @patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
-def test_get_data_handles_complex_list_expansion(mock_get_json, mock_get_combos, cdh):
+def test_get_data_handles_complex_list_expansion(mock_get_json, mock_get_combos, mock_get_json_status, cdh):
     mock_get_json.side_effect = [
         SIMPLE_PRODUCTS_JSON,
         FAKE_GEOS_JSON,
         SIMPLE_VARIABLES_JSON,
-        # Mock 4 data responses
-        [["B01001_001E"], ["1"]],
-        [["B01001_001E"], ["2"]],
-        [["B01001_001E"], ["3"]],
-        [["B01001_001E"], ["4"]],
+    ]
+    # Mock 4 data responses with (data, status_code) tuples
+    mock_get_json_status.side_effect = [
+        ([["B01001_001E"], ["1"]], 200),
+        ([["B01001_001E"], ["2"]], 200),
+        ([["B01001_001E"], ["3"]], 200),
+        ([["B01001_001E"], ["4"]], 200),
     ]
     mock_get_combos.return_value = [{}]
 
@@ -557,9 +567,10 @@ def test_get_data_with_specific_target_geos(mock_get, mock_get_combos, cdh):
 
 
 @pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url_with_status")
 @patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
 @patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
-def test_get_data_uses_wildcard_correctly(mock_get_json, mock_get_combos, cdh):
+def test_get_data_uses_wildcard_correctly(mock_get_json, mock_get_combos, mock_get_json_status, cdh):
     """
     Tests that get_data correctly uses a wildcard for the most granular,
     unspecified required geography.
@@ -569,9 +580,11 @@ def test_get_data_uses_wildcard_correctly(mock_get_json, mock_get_combos, cdh):
         SIMPLE_PRODUCTS_JSON,
         FAKE_GEOS_JSON,
         SIMPLE_VARIABLES_JSON,
-        # This is the final data call, which we will inspect
-        [["B01001_001E", "state", "county", "tract"], ["1234", "08", "069", "001201"]],
     ]
+    # This is the final data call, with (data, status_code) tuple
+    mock_get_json_status.return_value = (
+        [["B01001_001E", "state", "county", "tract"], ["1234", "08", "069", "001201"]], 200
+    )
 
     # --- Act ---
     cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
@@ -585,18 +598,20 @@ def test_get_data_uses_wildcard_correctly(mock_get_json, mock_get_combos, cdh):
     mock_get_combos.assert_not_called()
 
     # 2. Check that the final data-fetching call uses the wildcard for county.
-    assert mock_get_json.call_count == 3 + 1  # 3 setup calls, 1 data call
+    assert mock_get_json.call_count == 3  # 3 setup calls
+    assert mock_get_json_status.call_count == 1  # 1 data call
 
-    final_data_call = mock_get_json.call_args_list[-1]
+    final_data_call = mock_get_json_status.call_args_list[0]
     params = final_data_call.args[1]
     assert params["for"] == "tract:*"
     assert params["in"] == "state:08"
 
 
 @pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url_with_status")
 @patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
 @patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
-def test_get_data_uses_wildcard_correctly2(mock_get_json, mock_get_combos, cdh):
+def test_get_data_uses_wildcard_correctly2(mock_get_json, mock_get_combos, mock_get_json_status, cdh):
     """
     Tests that get_data correctly uses a wildcard for the most granular,
     unspecified required geography.
@@ -606,12 +621,12 @@ def test_get_data_uses_wildcard_correctly2(mock_get_json, mock_get_combos, cdh):
         SIMPLE_PRODUCTS_JSON,
         FAKE_GEOS_JSON,
         SIMPLE_VARIABLES_JSON,
-        # This is the final data call, which we will inspect
-        [
-            ["B01001_001E", "state", "county", "tract", "block group"],
-            ["1234", "08", "069", "001201", "1"],
-        ],
     ]
+    # This is the final data call, with (data, status_code) tuple
+    mock_get_json_status.return_value = (
+        [["B01001_001E", "state", "county", "tract", "block group"],
+         ["1234", "08", "069", "001201", "1"]], 200
+    )
 
     # --- Act ---
     cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
@@ -625,18 +640,20 @@ def test_get_data_uses_wildcard_correctly2(mock_get_json, mock_get_combos, cdh):
     mock_get_combos.assert_not_called()
 
     # 2. Check that the final data-fetching call uses the wildcard for county.
-    assert mock_get_json.call_count == 3 + 1  # 3 setup calls, 1 data call
+    assert mock_get_json.call_count == 3  # 3 setup calls
+    assert mock_get_json_status.call_count == 1  # 1 data call
 
-    final_data_call = mock_get_json.call_args_list[-1]
+    final_data_call = mock_get_json_status.call_args_list[0]
     params = final_data_call.args[1]
     assert params["for"] == "block group:*"
     assert params["in"] == "state:08 county:*"
 
 
 @pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url_with_status")
 @patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
 @patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
-def test_get_data_wildcard_with_us_scope(mock_get_json, mock_get_combos, cdh):
+def test_get_data_wildcard_with_us_scope(mock_get_json, mock_get_combos, mock_get_json_status, cdh):
     """
     Tests the 'Everything' case: a granular geo with no 'within' clause,
     triggering state discovery followed by wildcard calls for each state.
@@ -646,8 +663,11 @@ def test_get_data_wildcard_with_us_scope(mock_get_json, mock_get_combos, cdh):
         SIMPLE_PRODUCTS_JSON,
         FAKE_GEOS_JSON,
         SIMPLE_VARIABLES_JSON,
-        [["B01001_001E"], ["100"]],  # Data for state 01
-        [["B01001_001E"], ["200"]],  # Data for state 02
+    ]
+    # Mock data responses with (data, status_code) tuples
+    mock_get_json_status.side_effect = [
+        ([["B01001_001E"], ["100"]], 200),  # Data for state 01
+        ([["B01001_001E"], ["200"]], 200),  # Data for state 02
     ]
     # Mock the discovery of states
     mock_get_combos.return_value = [{"state": "01"}, {"state": "02"}]
@@ -664,10 +684,11 @@ def test_get_data_wildcard_with_us_scope(mock_get_json, mock_get_combos, cdh):
     assert mock_get_combos.call_args.args[1] == ["state"]  # Should fetch states
 
     # 2. Two data calls should be made, one for each discovered state
-    assert mock_get_json.call_count == 3 + 2
+    assert mock_get_json.call_count == 3  # 3 setup calls
+    assert mock_get_json_status.call_count == 2  # 2 data calls
 
-    call1_params = mock_get_json.call_args_list[-2].args[1]
-    call2_params = mock_get_json.call_args_list[-1].args[1]
+    call1_params = mock_get_json_status.call_args_list[0].args[1]
+    call2_params = mock_get_json_status.call_args_list[1].args[1]
 
     assert call1_params["for"] == "tract:*"
     assert call1_params["in"] == "state:01"
@@ -676,10 +697,11 @@ def test_get_data_wildcard_with_us_scope(mock_get_json, mock_get_combos, cdh):
 
 
 @pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url_with_status")
 @patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
 @patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
 def test_get_data_no_requirements_bypasses_wildcard(
-    mock_get_json, mock_get_combos, cdh
+    mock_get_json, mock_get_combos, mock_get_json_status, cdh
 ):
     """
     Tests that a geography with no requirements (like 'state') bypasses
@@ -690,8 +712,8 @@ def test_get_data_no_requirements_bypasses_wildcard(
         SIMPLE_PRODUCTS_JSON,
         FAKE_GEOS_JSON,
         SIMPLE_VARIABLES_JSON,
-        [["B01001_001E", "state"], ["1234", "01"]],
     ]
+    mock_get_json_status.return_value = ([["B01001_001E", "state"], ["1234", "01"]], 200)
 
     # --- Act ---
     cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
@@ -702,16 +724,18 @@ def test_get_data_no_requirements_bypasses_wildcard(
     # --- Assert ---
     mock_get_combos.assert_not_called()
 
-    assert mock_get_json.call_count == 3 + 1
-    final_call_params = mock_get_json.call_args.args[1]
+    assert mock_get_json.call_count == 3  # 3 setup calls
+    assert mock_get_json_status.call_count == 1  # 1 data call
+    final_call_params = mock_get_json_status.call_args.args[1]
     assert final_call_params["for"] == "state:*"
     assert "in" not in final_call_params
 
 
 @pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url_with_status")
 @patch("cendat.CenDatHelper.CenDatHelper._get_parent_geo_combinations")
 @patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
-def test_get_data_single_requirement_uses_wildcard(mock_get_json, mock_get_combos, cdh):
+def test_get_data_single_requirement_uses_wildcard(mock_get_json, mock_get_combos, mock_get_json_status, cdh):
     """
     Tests that a geo with a single requirement uses a wildcard for that
     requirement if it's not provided.
@@ -721,8 +745,8 @@ def test_get_data_single_requirement_uses_wildcard(mock_get_json, mock_get_combo
         SIMPLE_PRODUCTS_JSON,
         FAKE_GEOS_JSON,
         SIMPLE_VARIABLES_JSON,
-        [["B01001_001E", "state", "county"], ["1234", "01", "001"]],
     ]
+    mock_get_json_status.return_value = ([["B01001_001E", "state", "county"], ["1234", "01", "001"]], 200)
 
     # --- Act ---
     cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
@@ -733,28 +757,31 @@ def test_get_data_single_requirement_uses_wildcard(mock_get_json, mock_get_combo
     # --- Assert ---
     mock_get_combos.assert_not_called()
 
-    assert mock_get_json.call_count == 3 + 1
-    final_call_params = mock_get_json.call_args.args[1]
+    assert mock_get_json.call_count == 3  # 3 setup calls
+    assert mock_get_json_status.call_count == 1  # 1 data call
+    final_call_params = mock_get_json_status.call_args.args[1]
     assert final_call_params["for"] == "county:*"
     assert "in" not in final_call_params
 
 
 @pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url_with_status")
 @patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
-def test_get_data_include_names_adds_name_to_api_call(mock_get_json, cdh):
+def test_get_data_include_names_adds_name_to_api_call(mock_get_json, mock_get_json_status, cdh):
     """
     Tests that get_data(include_names=True) correctly prepends 'NAME' to the
     'get' parameter in the final API call.
     """
     # --- Arrange ---
-    # Mock the sequence of JSON metadata calls, followed by the final data call
     mock_get_json.side_effect = [
         SIMPLE_PRODUCTS_JSON,
         FAKE_GEOS_JSON,
         SIMPLE_VARIABLES_JSON,
-        # Mock data response for the final API call we will inspect
-        [["NAME", "B01001_001E", "state"], ["Colorado", "5877610", "08"]],
     ]
+    # Mock data response with (data, status_code) tuple
+    mock_get_json_status.return_value = (
+        [["NAME", "B01001_001E", "state"], ["Colorado", "5877610", "08"]], 200
+    )
 
     cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
     cdh.set_geos(values="state", by="desc")
@@ -764,10 +791,10 @@ def test_get_data_include_names_adds_name_to_api_call(mock_get_json, cdh):
     cdh.get_data(include_names=True)
 
     # --- Assert ---
-    # The last call to the mock should be the actual data request
-    final_call = mock_get_json.call_args
-    # The call arguments are passed as a tuple (url, params_dict)
-    api_params = final_call[0][1]
+    # The call to mock_get_json_status should be the actual data request
+    assert mock_get_json_status.call_count == 1
+    final_call = mock_get_json_status.call_args
+    api_params = final_call.args[1]
 
     # Check that 'NAME' was added to the 'get' string, before the data variable
     assert api_params["get"] == "NAME,B01001_001E"
@@ -1010,3 +1037,112 @@ def test_get_data_handles_names_and_attributes_together(mock_get, cdh):
     requested_vars_set = set(requested_vars_str.split(","))
 
     assert requested_vars_set == expected_vars_set
+
+
+@pytest.mark.unit
+def test_set_years_validation(cdh):
+    """Tests that set_years validates input correctly."""
+    cdh.set_years(2022)
+    assert cdh.years == [2022]
+
+    cdh.set_years([2020, 2021])
+    assert cdh.years == [2020, 2021]
+
+    with pytest.raises(TypeError):
+        cdh.set_years("2022")
+
+
+@pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
+def test_list_geos_filtering(mock_get_json, cdh):
+    """Tests listing geographies with filtering."""
+    mock_get_json.side_effect = [
+        SIMPLE_PRODUCTS_JSON,
+        FAKE_GEOS_JSON,
+    ]
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+
+    geos = cdh.list_geos(patterns="county", to_dicts=False)
+    assert "050" in geos
+    assert len(geos) == 1
+
+
+@pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
+def test_set_geos_errors(mock_get_json, cdh, capsys):
+    """Tests error handling in set_geos."""
+    mock_get_json.return_value = SIMPLE_PRODUCTS_JSON
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+
+    # Test invalid 'by' argument
+    cdh.set_geos(values="state", by="invalid")
+    captured = capsys.readouterr()
+    assert "Error: `by` must be either 'sumlev' or 'desc'" in captured.out
+
+    # Test no geos found
+    cdh.set_geos(values="Nonexistent Geo", by="desc")
+    captured = capsys.readouterr()
+    assert "Error: No valid geographies were found to set" in captured.out
+
+
+@pytest.mark.unit
+@patch("cendat.CenDatHelper.CenDatHelper._get_json_from_url")
+def test_describe_groups_output(mock_get_json, cdh, capsys):
+    """Tests the output of describe_groups."""
+    mock_get_json.side_effect = [
+        SIMPLE_PRODUCTS_JSON,
+        SIMPLE_GROUPS_JSON,
+        SIMPLE_VARIABLES_JSON,
+        SIMPLE_GROUPS_JSON,  # Called again inside describe_groups
+    ]
+    cdh.set_products(titles="American Community Survey (2022/acs/acs5)")
+    cdh.set_groups("B01001")
+
+    cdh.describe_groups()
+    captured = capsys.readouterr()
+
+    assert "Group: B01001 (SEX BY AGE)" in captured.out
+    assert "B01001_001E: Total Population" in captured.out
+
+
+@pytest.mark.unit
+def test_to_gpd_conversion():
+    """Tests conversion to GeoDataFrame."""
+    try:
+        import geopandas as gpd
+        from shapely.geometry import Polygon
+    except ImportError:
+        pytest.skip("GeoPandas not installed")
+
+    poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    gdf = gpd.GeoDataFrame({"GEOID": ["01", "02"], "geometry": [poly, poly]})
+
+    data = [
+        {
+            "product": "Product A",
+            "vintage": [2022],
+            "sumlev": "040",
+            "desc": "state",
+            "schema": ["GEO_ID", "NAME"],
+            "data": [["0400000US01", "Alabama"], ["0400000US02", "Alaska"]],
+            "geometry": gdf,
+        }
+    ]
+    response = CenDatResponse(data)
+
+    res_gdf = response.to_gpd()
+    assert isinstance(res_gdf, gpd.GeoDataFrame)
+    assert len(res_gdf) == 2
+    assert "geometry" in res_gdf.columns
+
+
+@pytest.mark.unit
+def test_tabulate_stratified(tabulation_response, capsys):
+    """Tests stratified tabulation."""
+    # Stratify by STATE, tabulate RACE
+    tabulation_response.tabulate("RACE", strat_by="STATE")
+    captured = capsys.readouterr().out
+
+    assert find_row_in_output(r"CA\s+┆\s+Black\s+┆\s+1", captured)
+    assert find_row_in_output(r"TX\s+┆\s+White\s+┆\s+2", captured)
+
