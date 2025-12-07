@@ -138,8 +138,7 @@ class CenDatHelper:
             timeout (int): Request timeout in seconds.
 
         Returns:
-            Optional[List[List[str]]]: The parsed JSON data (typically a list
-            of lists), or None if an error occurs.
+            Optional[List[List[str]]]: The parsed JSON data (typically a list of lists), or None if an error occurs.
         """
         if not params:
             params = {}
@@ -191,9 +190,7 @@ class CenDatHelper:
             timeout (int): Request timeout in seconds.
 
         Returns:
-            Tuple[Optional[List[List[str]]], Optional[int]]: A tuple of
-            (parsed JSON data, HTTP status code). Returns (None, status_code)
-            on error, or (None, None) on connection/timeout errors.
+            Tuple[Optional[List[List[str]]], Optional[int]]: A tuple of (parsed JSON data, HTTP status code). Returns (None, status_code) on error, or (None, None) on connection/timeout errors.
         """
         if not params:
             params = {}
@@ -1028,8 +1025,7 @@ class CenDatHelper:
             max_workers (int, optional): Max concurrent threads for fetching.
 
         Returns:
-            List[Dict]: A list of dictionaries, where each dict is a valid
-                        `in` clause for a data request.
+            List[Dict]: A list of dictionaries, where each dict is a valid `in` clause for a data request.
 
         Strategy: This is a recursive function.
         - Base Case: If there are no more required geographies to fetch, return the
@@ -1102,8 +1098,7 @@ class CenDatHelper:
             count_only (bool): If True, returns only the count of matching records.
 
         Returns:
-            If count_only is True, returns an integer count. Otherwise, returns
-            a GeoDataFrame with the requested geometries.
+            If count_only is True, returns an integer count. Otherwise, returns a GeoDataFrame with the requested geometries.
         """
         import geopandas as gpd
 
@@ -1169,8 +1164,7 @@ class CenDatHelper:
             count_only (bool): If True, returns only the count of matching records.
 
         Returns:
-            Tuple of (result, status_code). Result is either an int (count) or
-            GeoDataFrame. status_code is None for connection errors.
+            Tuple of (result, status_code). Result is either an int (count) or GeoDataFrame. status_code is None for connection errors.
         """
         import geopandas as gpd
 
@@ -1595,8 +1589,7 @@ class CenDatHelper:
                 retrying. Worker count won't be reduced below this. Defaults to 5.
 
         Returns:
-            CenDatResponse: An object containing the aggregated data from all
-                            successful API calls.
+            CenDatResponse: An object containing the aggregated data from all successful API calls.
 
         High-level Strategy:
         1. Generate parameter sets by combining set products, geos, and variables/groups.
