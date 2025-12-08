@@ -24,7 +24,13 @@ plugins:
           options:
             show_root_heading: true   # Show "cendat.CenDatHelper" as a header
             show_source: true         # Add a "Show Source" button to methods
-  - social  # Auto-generates social preview images
+  # - social  # Requires native cairo library: brew install cairo
+
+markdown_extensions:
+  - admonition              # For !!! tip, !!! note, !!! warning boxes
+  - pymdownx.details        # For collapsible admonitions (??? syntax)
+  - pymdownx.superfences    # Better fenced code blocks
+  - pymdownx.highlight      # Code syntax highlighting
 
 nav:
   - Home: index.md

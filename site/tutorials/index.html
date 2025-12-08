@@ -1,0 +1,1289 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://mostlyunoriginal.github.io/cendat/tutorials/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../reference/core/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Tutorials - Cendat</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tutorials" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Cendat" class="md-header__button md-logo" aria-label="Cendat" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Cendat
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Tutorials
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/mostlyunoriginal/cendat" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mostlyunoriginal/cendat
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Tutorials
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/core/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Cendat" class="md-nav__button md-logo" aria-label="Cendat" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Cendat
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/mostlyunoriginal/cendat" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mostlyunoriginal/cendat
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tutorial-1-acs-pums-microdata-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tutorial 1: ACS PUMS Microdata Analysis
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tutorial 1: ACS PUMS Microdata Analysis">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-1-find-and-select-the-pums-product" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Find and Select the PUMS Product
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-select-geography-and-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Select Geography and Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-get-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Get Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-analyze-with-tabulate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Analyze with Tabulate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-convert-to-dataframe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5: Convert to DataFrame
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tutorial-2-acs-5-year-aggregate-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tutorial 2: ACS 5-Year Aggregate Data
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tutorial 2: ACS 5-Year Aggregate Data">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#goal_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-1-find-the-acs-5-year-product" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Find the ACS 5-Year Product
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-explore-variable-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Explore Variable Groups
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-select-variables-and-geography" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Select Variables and Geography
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-get-data-with-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Get Data with Names
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-5-analyze" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5: Analyze
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tutorial-3-multi-year-comparisons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tutorial 3: Multi-Year Comparisons
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tutorial 3: Multi-Year Comparisons">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#goal_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-select-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Select Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-get-data_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Get Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-complex-filtering-with-tabulate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Complex Filtering with Tabulate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tutorial-4-working-with-geometries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tutorial 4: Working with Geometries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tutorial 4: Working with Geometries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#goal_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-select-data-and-geography" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Select Data and Geography
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-get-data-with-geometry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Get Data with Geometry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-convert-to-geodataframe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Convert to GeoDataFrame
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tutorial-5-cps-microdata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tutorial 5: CPS Microdata
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tutorial 5: CPS Microdata">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#goal_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-explore-and-select-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Explore and Select Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-get-data_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Get Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-analyze-with-pooled-weights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Analyze with Pooled Weights
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tips-and-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tips and Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tips and Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#finding-the-right-product" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Finding the Right Product
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-groups-effectively" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using Groups Effectively
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate Limiting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-in_place-option" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The in_place Option
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tutorials">Tutorials</h1>
+<p>Step-by-step guides for common cendat workflows.</p>
+<hr />
+<h2 id="tutorial-1-acs-pums-microdata-analysis">Tutorial 1: ACS PUMS Microdata Analysis</h2>
+<p>This tutorial demonstrates analyzing person-level microdata from the American Community Survey (ACS) Public Use Microdata Sample (PUMS).</p>
+<h3 id="goal">Goal</h3>
+<p>Get age and sex data for adults in California and Texas, then create weighted frequency tables stratified by state.</p>
+<h3 id="setup">Setup</h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cendat</span><span class="w"> </span><span class="kn">import</span> <span class="n">CenDatHelper</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dotenv</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dotenv</span>
+
+<span class="c1"># Load your API key from environment</span>
+<span class="n">load_dotenv</span><span class="p">()</span>
+<span class="n">cdh</span> <span class="o">=</span> <span class="n">CenDatHelper</span><span class="p">(</span><span class="n">years</span><span class="o">=</span><span class="p">[</span><span class="mi">2022</span><span class="p">],</span> <span class="n">key</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;CENSUS_API_KEY&quot;</span><span class="p">))</span>
+</code></pre></div>
+<h3 id="step-1-find-and-select-the-pums-product">Step 1: Find and Select the PUMS Product</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Search for the ACS 1-year PUMS product</span>
+<span class="c1"># The \b ensures we match the exact endpoint, not subpaths</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">list_products</span><span class="p">(</span><span class="n">patterns</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;acs/acs1/pums\b&quot;</span><span class="p">)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_products</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="step-2-select-geography-and-variables">Step 2: Select Geography and Variables</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># For PUMS, geography is simpler—we just need &quot;state&quot;</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_geos</span><span class="p">(</span><span class="n">values</span><span class="o">=</span><span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="n">by</span><span class="o">=</span><span class="s2">&quot;desc&quot;</span><span class="p">)</span>
+
+<span class="c1"># Select the variables we need:</span>
+<span class="c1"># - SEX: Person&#39;s sex</span>
+<span class="c1"># - AGEP: Person&#39;s age</span>
+<span class="c1"># - ST: State code</span>
+<span class="c1"># - PWGTP: Person weight (crucial for microdata!)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_variables</span><span class="p">(</span><span class="n">names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;SEX&quot;</span><span class="p">,</span> <span class="s2">&quot;AGEP&quot;</span><span class="p">,</span> <span class="s2">&quot;ST&quot;</span><span class="p">,</span> <span class="s2">&quot;PWGTP&quot;</span><span class="p">])</span>
+</code></pre></div>
+<h3 id="step-3-get-data">Step 3: Get Data</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Fetch data for California (06) and Texas (48)</span>
+<span class="n">response</span> <span class="o">=</span> <span class="n">cdh</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span>
+    <span class="n">within</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;06&quot;</span><span class="p">,</span> <span class="s2">&quot;48&quot;</span><span class="p">]}</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="step-4-analyze-with-tabulate">Step 4: Analyze with Tabulate</h3>
+<p>The <code>tabulate()</code> method creates Stata-style frequency tables with proper weighting:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Age distribution by sex, stratified by state</span>
+<span class="c1"># Only adults (AGEP &gt; 17), using person weights</span>
+<span class="n">response</span><span class="o">.</span><span class="n">tabulate</span><span class="p">(</span>
+    <span class="s2">&quot;SEX&quot;</span><span class="p">,</span> <span class="s2">&quot;AGEP&quot;</span><span class="p">,</span>
+    <span class="n">strat_by</span><span class="o">=</span><span class="s2">&quot;ST&quot;</span><span class="p">,</span>
+    <span class="n">weight_var</span><span class="o">=</span><span class="s2">&quot;PWGTP&quot;</span><span class="p">,</span>
+    <span class="n">where</span><span class="o">=</span><span class="s2">&quot;AGEP &gt; 17&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="step-5-convert-to-dataframe">Step 5: Convert to DataFrame</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># For further analysis, convert to a DataFrame</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">to_polars</span><span class="p">(</span><span class="n">concat</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">destring</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
+</code></pre></div>
+<hr />
+<h2 id="tutorial-2-acs-5-year-aggregate-data">Tutorial 2: ACS 5-Year Aggregate Data</h2>
+<p>This tutorial covers the most common use case: fetching aggregate statistics from the ACS 5-Year estimates.</p>
+<h3 id="goal_1">Goal</h3>
+<p>Get poverty statistics for all places (cities, towns, CDPs) in a state.</p>
+<h3 id="setup_1">Setup</h3>
+<div class="highlight"><pre><span></span><code><span class="n">cdh</span> <span class="o">=</span> <span class="n">CenDatHelper</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;CENSUS_API_KEY&quot;</span><span class="p">))</span>
+</code></pre></div>
+<h3 id="step-1-find-the-acs-5-year-product">Step 1: Find the ACS 5-Year Product</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># The \) at the end matches products ending with a closing paren,</span>
+<span class="c1"># which filters out sub-products like /profile, /subject, etc.</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">list_products</span><span class="p">(</span><span class="n">years</span><span class="o">=</span><span class="p">[</span><span class="mi">2023</span><span class="p">],</span> <span class="n">patterns</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;acs/acs5\)&quot;</span><span class="p">)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_products</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="step-2-explore-variable-groups">Step 2: Explore Variable Groups</h3>
+<p>For products like ACS with thousands of variables, groups are essential:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Search for poverty-related groups</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">list_groups</span><span class="p">(</span><span class="n">patterns</span><span class="o">=</span><span class="s2">&quot;poverty&quot;</span><span class="p">)</span>
+
+<span class="c1"># Let&#39;s use B17001 (Poverty Status by Sex by Age)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_groups</span><span class="p">(</span><span class="s2">&quot;B17001&quot;</span><span class="p">)</span>
+
+<span class="c1"># See what variables are in this group</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">describe_groups</span><span class="p">()</span>
+</code></pre></div>
+<p>The <code>describe_groups()</code> output shows the hierarchical structure, making it easy to pick specific variables.</p>
+<h3 id="step-3-select-variables-and-geography">Step 3: Select Variables and Geography</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># B17001_001E = Total population for poverty calculation</span>
+<span class="c1"># B17001_002E = Population below poverty level</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_variables</span><span class="p">([</span><span class="s2">&quot;B17001_001E&quot;</span><span class="p">,</span> <span class="s2">&quot;B17001_002E&quot;</span><span class="p">])</span>
+
+<span class="c1"># 160 = Places (cities, towns, CDPs)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_geos</span><span class="p">([</span><span class="s2">&quot;160&quot;</span><span class="p">])</span>
+</code></pre></div>
+<h3 id="step-4-get-data-with-names">Step 4: Get Data with Names</h3>
+<div class="highlight"><pre><span></span><code><span class="n">response</span> <span class="o">=</span> <span class="n">cdh</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span>
+    <span class="n">include_names</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>      <span class="c1"># Include place names</span>
+    <span class="n">include_attributes</span><span class="o">=</span><span class="kc">True</span>  <span class="c1"># Include margins of error</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="step-5-analyze">Step 5: Analyze</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Convert to DataFrame</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">to_polars</span><span class="p">(</span><span class="n">concat</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">destring</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">df</span><span class="o">.</span><span class="n">glimpse</span><span class="p">()</span>
+
+<span class="c1"># Quick tabulation: how many places have &gt;10,000 population?</span>
+<span class="n">response</span><span class="o">.</span><span class="n">tabulate</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="n">where</span><span class="o">=</span><span class="s2">&quot;B17001_001E &gt; 10_000&quot;</span><span class="p">)</span>
+
+<span class="c1"># Weighted by population</span>
+<span class="n">response</span><span class="o">.</span><span class="n">tabulate</span><span class="p">(</span>
+    <span class="s2">&quot;state&quot;</span><span class="p">,</span>
+    <span class="n">weight_var</span><span class="o">=</span><span class="s2">&quot;B17001_001E&quot;</span><span class="p">,</span>
+    <span class="n">where</span><span class="o">=</span><span class="s2">&quot;B17001_001E &gt; 10_000&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="tutorial-3-multi-year-comparisons">Tutorial 3: Multi-Year Comparisons</h2>
+<p>cendat makes it easy to compare data across multiple years.</p>
+<h3 id="goal_2">Goal</h3>
+<p>Find Colorado incorporated places with very low poverty rates across recent years.</p>
+<h3 id="setup_2">Setup</h3>
+<div class="highlight"><pre><span></span><code><span class="n">cdh</span> <span class="o">=</span> <span class="n">CenDatHelper</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;CENSUS_API_KEY&quot;</span><span class="p">))</span>
+
+<span class="c1"># Request multiple years at once</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">list_products</span><span class="p">(</span><span class="n">years</span><span class="o">=</span><span class="p">[</span><span class="mi">2020</span><span class="p">,</span> <span class="mi">2021</span><span class="p">,</span> <span class="mi">2022</span><span class="p">,</span> <span class="mi">2023</span><span class="p">],</span> <span class="n">patterns</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;acs/acs5\)&quot;</span><span class="p">)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_products</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="step-2-select-data">Step 2: Select Data</h3>
+<div class="highlight"><pre><span></span><code><span class="n">cdh</span><span class="o">.</span><span class="n">set_groups</span><span class="p">([</span><span class="s2">&quot;B17001&quot;</span><span class="p">])</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_geos</span><span class="p">([</span><span class="s2">&quot;160&quot;</span><span class="p">])</span>  <span class="c1"># Places</span>
+</code></pre></div>
+<h3 id="step-3-get-data_1">Step 3: Get Data</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Filter to Colorado (state = 08)</span>
+<span class="n">response</span> <span class="o">=</span> <span class="n">cdh</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span>
+    <span class="n">include_names</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">within</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="s2">&quot;08&quot;</span><span class="p">}</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="step-4-complex-filtering-with-tabulate">Step 4: Complex Filtering with Tabulate</h3>
+<p>The <code>where</code> parameter supports multiple conditions:</p>
+<div class="highlight"><pre><span></span><code><span class="n">response</span><span class="o">.</span><span class="n">tabulate</span><span class="p">(</span>
+    <span class="s2">&quot;NAME&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;B17001_002E&quot;</span><span class="p">,</span>  <span class="c1"># Below poverty</span>
+    <span class="s2">&quot;B17001_001E&quot;</span><span class="p">,</span>  <span class="c1"># Total</span>
+    <span class="n">where</span><span class="o">=</span><span class="p">[</span>
+        <span class="s2">&quot;B17001_001E &gt; 1_000&quot;</span><span class="p">,</span>                    <span class="c1"># Population &gt; 1,000</span>
+        <span class="s2">&quot;B17001_002E / B17001_001E &lt; 0.01&quot;</span><span class="p">,</span>       <span class="c1"># Poverty rate &lt; 1%</span>
+        <span class="s2">&quot;&#39;CDP&#39; not in NAME&quot;</span><span class="p">,</span>                      <span class="c1"># Exclude CDPs</span>
+    <span class="p">],</span>
+    <span class="n">weight_var</span><span class="o">=</span><span class="s2">&quot;B17001_001E&quot;</span><span class="p">,</span>
+    <span class="n">strat_by</span><span class="o">=</span><span class="s2">&quot;vintage&quot;</span>  <span class="c1"># Separate results by year</span>
+<span class="p">)</span>
+</code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Condition Syntax</p>
+<p>The <code>where</code> parameter supports:</p>
+<ul>
+<li>Simple comparisons: <code>"AGEP &gt; 17"</code></li>
+<li>Division expressions: <code>"B17001_002E / B17001_001E &lt; 0.01"</code></li>
+<li>String containment: <code>"'CDP' not in NAME"</code></li>
+</ul>
+</div>
+<hr />
+<h2 id="tutorial-4-working-with-geometries">Tutorial 4: Working with Geometries</h2>
+<p>cendat can fetch geographic boundaries alongside your data for mapping.</p>
+<h3 id="goal_3">Goal</h3>
+<p>Get race data with geometries for US regions.</p>
+<h3 id="setup_3">Setup</h3>
+<div class="highlight"><pre><span></span><code><span class="n">cdh</span> <span class="o">=</span> <span class="n">CenDatHelper</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;CENSUS_API_KEY&quot;</span><span class="p">))</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">list_products</span><span class="p">(</span><span class="n">years</span><span class="o">=</span><span class="p">[</span><span class="mi">2011</span><span class="p">],</span> <span class="n">patterns</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;acs/acs5\)&quot;</span><span class="p">)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_products</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="step-2-select-data-and-geography">Step 2: Select Data and Geography</h3>
+<div class="highlight"><pre><span></span><code><span class="n">cdh</span><span class="o">.</span><span class="n">list_groups</span><span class="p">(</span><span class="n">patterns</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;^race&quot;</span><span class="p">)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_groups</span><span class="p">([</span><span class="s2">&quot;B02001&quot;</span><span class="p">])</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">describe_groups</span><span class="p">()</span>
+
+<span class="c1"># 020 = Region</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_geos</span><span class="p">([</span><span class="s2">&quot;020&quot;</span><span class="p">])</span>
+</code></pre></div>
+<h3 id="step-3-get-data-with-geometry">Step 3: Get Data with Geometry</h3>
+<div class="highlight"><pre><span></span><code><span class="n">response</span> <span class="o">=</span> <span class="n">cdh</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span>
+    <span class="n">include_names</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">include_geometry</span><span class="o">=</span><span class="kc">True</span>  <span class="c1"># This fetches boundaries from TIGERweb</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="step-4-convert-to-geodataframe">Step 4: Convert to GeoDataFrame</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># to_gpd() returns a GeoDataFrame ready for mapping</span>
+<span class="n">gdf</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">to_gpd</span><span class="p">(</span><span class="n">destring</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">join_strategy</span><span class="o">=</span><span class="s2">&quot;inner&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">gdf</span><span class="p">)</span>
+
+<span class="c1"># Use with matplotlib, folium, or your preferred mapping library</span>
+<span class="n">gdf</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">column</span><span class="o">=</span><span class="s2">&quot;B02001_001E&quot;</span><span class="p">,</span> <span class="n">legend</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Supported Geographies</p>
+<p>Geometry fetching currently supports: regions (020), divisions (030), states (040), counties (050), county subdivisions (060), census tracts (140), block groups (150), and places (160).</p>
+</div>
+<hr />
+<h2 id="tutorial-5-cps-microdata">Tutorial 5: CPS Microdata</h2>
+<p>The Current Population Survey (CPS) supplements provide specialized microdata on topics like tobacco use, voting, and food security.</p>
+<h3 id="goal_4">Goal</h3>
+<p>Analyze tobacco use patterns across states using multi-year CPS data.</p>
+<h3 id="setup_4">Setup</h3>
+<div class="highlight"><pre><span></span><code><span class="n">cdh</span> <span class="o">=</span> <span class="n">CenDatHelper</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;CENSUS_API_KEY&quot;</span><span class="p">))</span>
+
+<span class="c1"># Get multiple years of CPS Tobacco Use Supplement</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">list_products</span><span class="p">(</span><span class="n">years</span><span class="o">=</span><span class="p">[</span><span class="mi">2022</span><span class="p">,</span> <span class="mi">2023</span><span class="p">],</span> <span class="n">patterns</span><span class="o">=</span><span class="s2">&quot;/cps/tobacco&quot;</span><span class="p">)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_products</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="step-2-explore-and-select-variables">Step 2: Explore and Select Variables</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># See available variable groups</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">list_groups</span><span class="p">()</span>
+
+<span class="c1"># Select specific variables</span>
+<span class="c1"># PEA1, PEA3: Tobacco use questions</span>
+<span class="c1"># PWNRWGT: Person weight</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_variables</span><span class="p">([</span><span class="s2">&quot;PEA1&quot;</span><span class="p">,</span> <span class="s2">&quot;PEA3&quot;</span><span class="p">,</span> <span class="s2">&quot;PWNRWGT&quot;</span><span class="p">])</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_geos</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="s2">&quot;desc&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="step-3-get-data_2">Step 3: Get Data</h3>
+<div class="highlight"><pre><span></span><code><span class="n">response</span> <span class="o">=</span> <span class="n">cdh</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="n">within</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;06&quot;</span><span class="p">,</span> <span class="s2">&quot;48&quot;</span><span class="p">]})</span>
+</code></pre></div>
+<h3 id="step-4-analyze-with-pooled-weights">Step 4: Analyze with Pooled Weights</h3>
+<p>When combining multiple survey years, divide the weights:</p>
+<div class="highlight"><pre><span></span><code><span class="n">response</span><span class="o">.</span><span class="n">tabulate</span><span class="p">(</span>
+    <span class="s2">&quot;PEA1&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;PEA3&quot;</span><span class="p">,</span>
+    <span class="n">strat_by</span><span class="o">=</span><span class="s2">&quot;state&quot;</span><span class="p">,</span>
+    <span class="n">weight_var</span><span class="o">=</span><span class="s2">&quot;PWNRWGT&quot;</span><span class="p">,</span>
+    <span class="n">weight_div</span><span class="o">=</span><span class="mi">3</span>  <span class="c1"># Divide weight for pooled years</span>
+<span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="tips-and-best-practices">Tips and Best Practices</h2>
+<h3 id="finding-the-right-product">Finding the Right Product</h3>
+<p>Use regex patterns to filter products efficiently:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># ACS 5-year (main product, not profiles/subjects)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">list_products</span><span class="p">(</span><span class="n">patterns</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;acs/acs5\)&quot;</span><span class="p">)</span>
+
+<span class="c1"># ACS 1-year PUMS</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">list_products</span><span class="p">(</span><span class="n">patterns</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;acs/acs1/pums\b&quot;</span><span class="p">)</span>
+
+<span class="c1"># Decennial Census</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">list_products</span><span class="p">(</span><span class="n">patterns</span><span class="o">=</span><span class="s2">&quot;dec/&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="using-groups-effectively">Using Groups Effectively</h3>
+<p>For products with many variables (ACS, Decennial), always start with groups:</p>
+<div class="highlight"><pre><span></span><code><span class="n">cdh</span><span class="o">.</span><span class="n">list_groups</span><span class="p">(</span><span class="n">patterns</span><span class="o">=</span><span class="s2">&quot;your topic&quot;</span><span class="p">)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">set_groups</span><span class="p">(</span><span class="s2">&quot;GROUP_NAME&quot;</span><span class="p">)</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">describe_groups</span><span class="p">()</span>  <span class="c1"># See variable hierarchy</span>
+</code></pre></div>
+<h3 id="rate-limiting">Rate Limiting</h3>
+<p>For large requests, adjust <code>max_workers</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># For thousands of API calls, reduce concurrency</span>
+<span class="n">response</span> <span class="o">=</span> <span class="n">cdh</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="the-in_place-option">The <code>in_place</code> Option</h3>
+<p>For iterative work or building up complex queries:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Keep data attached to the helper object</span>
+<span class="n">cdh</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="n">in_place</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Access later via helper[&#39;params&#39;]</span>
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "toc.integrate", "content.code.copy"], "search": "../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>
