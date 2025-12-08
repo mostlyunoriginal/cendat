@@ -10,3 +10,7 @@ mkdocs-material
 mkdocs-material-extensions
 mkdocstrings
 mkdocstrings-python
+mkdocs-jupyter
+jupyter
+nbconvert
+matplotlib

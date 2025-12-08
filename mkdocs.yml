@@ -25,6 +25,9 @@ plugins:
             show_root_heading: true   # Show "cendat.CenDatHelper" as a header
             show_source: true         # Add a "Show Source" button to methods
   # - social  # Requires native cairo library: brew install cairo
+  - mkdocs-jupyter:
+      include_source: true    # Show cell source by default
+      execute: false          # We execute notebooks in CI before building
 
 markdown_extensions:
   - admonition              # For !!! tip, !!! note, !!! warning boxes
@@ -34,6 +37,12 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Tutorials: tutorials.md
+  - Tutorials:
+      - Overview: tutorials.md
+      - ACS PUMS Microdata: tutorials/01_pums_microdata.ipynb
+      - ACS 5-Year Aggregate: tutorials/02_acs5_aggregate.ipynb
+      - Multi-Year Comparisons: tutorials/03_multi_year.ipynb
+      - Working with Geometries: tutorials/04_geometries.ipynb
+      - CPS Microdata: tutorials/05_cps_microdata.ipynb
   - API Reference:
       - Core: reference/core.md      
