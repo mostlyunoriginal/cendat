@@ -126,6 +126,57 @@ class CenDatHelper:
         else:
             print("⚠️ No API key provided. API requests may have stricter rate limits.")
 
+    def _request_with_retry(
+        self,
+        url: str,
+        params: Optional[Dict] = None,
+        timeout: int = 30,
+        max_retries: int = 3,
+        backoff_base: int = 2,
+    ) -> requests.Response:
+        """
+        Makes an HTTP GET request with automatic retry on connection errors.
+
+        Handles transient network failures (ConnectionError, Timeout, OSError)
+        with exponential backoff. Does NOT retry on HTTP error status codes
+        (those are handled by the caller via raise_for_status).
+
+        Args:
+            url (str): The URL to fetch.
+            params (Dict, optional): Query parameters.
+            timeout (int): Request timeout in seconds.
+            max_retries (int): Maximum retry attempts on connection errors.
+            backoff_base (int): Base for exponential backoff calculation.
+
+        Returns:
+            requests.Response: The response object.
+
+        Raises:
+            requests.exceptions.RequestException: If all retries fail.
+        """
+        last_exception = None
+        for attempt in range(max_retries + 1):
+            try:
+                return requests.get(url, params=params, timeout=timeout)
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+                OSError,
+            ) as e:
+                last_exception = e
+                if attempt < max_retries:
+                    backoff = backoff_base ** (attempt + 1)
+                    print(
+                        f"⚠️ Connection error ({type(e).__name__}), retrying in {backoff}s... "
+                        f"(attempt {attempt + 1}/{max_retries})"
+                    )
+                    time.sleep(backoff)
+                else:
+                    print(f"❌ Connection failed after {max_retries} retries: {e}")
+                    raise
+        # This should never be reached, but just in case
+        raise last_exception
+
     def _get_json_from_url(
         self, url: str, params: Optional[Dict] = None, timeout: int = 30
     ) -> Optional[List[List[str]]]:
@@ -146,7 +197,7 @@ class CenDatHelper:
             params["key"] = self.__key
 
         try:
-            response = requests.get(url, params=params, timeout=timeout)
+            response = self._request_with_retry(url, params=params, timeout=timeout)
             response.raise_for_status()
             return response.json()
         # The Census API can return a 200 OK with an error message in the body
@@ -198,7 +249,7 @@ class CenDatHelper:
             params["key"] = self.__key
 
         try:
-            response = requests.get(url, params=params, timeout=timeout)
+            response = self._request_with_retry(url, params=params, timeout=timeout)
             status_code = response.status_code
             response.raise_for_status()
             return response.json(), status_code
@@ -1119,7 +1170,7 @@ class CenDatHelper:
         params = {k: v for k, v in params.items() if v is not None}
 
         try:
-            response = requests.get(API_URL, params=params)
+            response = self._request_with_retry(API_URL, params=params)
             response.raise_for_status()
             json_response = response.json()
 
@@ -1184,7 +1235,7 @@ class CenDatHelper:
         params = {k: v for k, v in params.items() if v is not None}
 
         try:
-            response = requests.get(API_URL, params=params, timeout=timeout or 30)
+            response = self._request_with_retry(API_URL, params=params, timeout=timeout or 30)
             status_code = response.status_code
             response.raise_for_status()
             json_response = response.json()
@@ -1701,7 +1752,7 @@ class CenDatHelper:
             map_servers_fetched = False
 
             try:
-                response = requests.get(url)
+                response = self._request_with_retry(url)
                 response.raise_for_status()
                 map_servers = [
                     item["name"]
@@ -1812,7 +1863,7 @@ class CenDatHelper:
                     url = f"https://tigerweb.geo.census.gov/arcgis/rest/services/{map_server}/MapServer?f=pjson"
 
                     try:
-                        response = requests.get(url)
+                        response = self._request_with_retry(url)
                         response.raise_for_status()
 
                         map_server_layers = [
