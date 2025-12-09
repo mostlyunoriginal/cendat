@@ -1697,6 +1697,9 @@ class CenDatHelper:
                 "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb?f=pjson"
             )
 
+            map_servers = []  # Initialize to empty list
+            map_servers_fetched = False
+
             try:
                 response = requests.get(url)
                 response.raise_for_status()
@@ -1705,6 +1708,7 @@ class CenDatHelper:
                     for item in response.json()["services"]
                     if re.search(r"ACS|Census|Current", item["name"])
                 ]
+                map_servers_fetched = True
                 if verbose:
                     print("✅ Successfully fetched map servers.")
 
@@ -1771,7 +1775,10 @@ class CenDatHelper:
 
             if include_geometry:
                 skip_geometry = False
-                if (
+                if not map_servers_fetched:
+                    skip_geometry = True
+                    print("❌ Skipping geometry: could not fetch available map servers.")
+                elif (
                     product_info["type"].split("/")[0] == "dec"
                     and product_info["vintage"][0] >= 2010
                 ):
