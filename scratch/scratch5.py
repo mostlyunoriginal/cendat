@@ -36,7 +36,7 @@ gdf.plot(
     linewidth=0.8,  # The width of the state borders
     ax=ax,  # The axes to plot on
     legend=True,  # Show the color legend
-    alpha=0.7,
+    alpha=1.0,
     legend_kwds={
         "label": "Income",
         "orientation": "horizontal",
@@ -56,7 +56,7 @@ gdf.plot(
 # Customize the plot
 ax.set_title(
     "Larimer, Weld, and Boulder County Med. HH Income by block group",
-    fontdict={"fontsize": "20", "fontweight": "3"},
+    fontdict={"fontsize": "12", "fontweight": "3"},
 )
 ax.set_axis_off()
 plt.show()
