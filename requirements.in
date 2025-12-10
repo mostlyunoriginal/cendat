@@ -14,3 +14,5 @@ mkdocs-jupyter
 jupyter
 nbconvert
 matplotlib
+build
+twine
