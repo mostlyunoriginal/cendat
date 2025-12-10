@@ -11,8 +11,21 @@ theme:
     - navigation.expand      # Open sidebar by default
     - toc.integrate          # Table of contents on the right
     - content.code.copy      # "Copy" button on code blocks
-  palette: 
-    scheme: default          # Automatic light/dark mode support
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
 
 plugins:
   - search
